@@ -194,7 +194,7 @@ const FilterDropdown = ({ activeFilters, onApply, onClear }) => {
 
 // ─── Row Menu ─────────────────────────────────────────────────────────────────
 
-const RowMenu = ({ row, onView, onEdit, onDelete }) => {
+const RowMenu = ({ row, onView, onDelete }) => {
   const [open, setOpen] = useState(false);
   const ref = useRef(null);
 
@@ -207,7 +207,6 @@ const RowMenu = ({ row, onView, onEdit, onDelete }) => {
 
   const items = [
     { label: 'View Details', icon: Eye,    color: '#374151', action: () => { onView(row);   setOpen(false); } },
-    { label: 'Edit',         icon: Edit,   color: '#374151', action: () => { onEdit(row);   setOpen(false); } },
     { label: 'Delete',       icon: Trash2, color: '#EF4444', action: () => { onDelete(row); setOpen(false); } },
   ];
 
@@ -234,8 +233,10 @@ const RowMenu = ({ row, onView, onEdit, onDelete }) => {
 };
 
 // ─── Review Modal (Warehouse Monitoring Request) ───────────────────────────────
+// Now bound to a specific row: shows that shipment's own info & lets the reviewer
+// approve / reject / request inspection for THAT item.
 
-const ReviewModal = ({ onClose, showError }) => {
+const ReviewModal = ({ item, onClose, showError, onAction }) => {
   const [activeSection, setActiveSection] = useState('Request Information');
 
   const fieldStyle = {
@@ -253,6 +254,20 @@ const ReviewModal = ({ onClose, showError }) => {
     const a = document.createElement('a'); a.href = doc.url; a.download = doc.name; a.click();
   };
 
+  const requestFields = [
+    ['Request Title',     'Warehouse Registration Request'],
+    ['Shipment ID',       item?.id],
+    ['Imported By',       item?.importedBy],
+    ['Assigned Warehouse',item?.warehouse],
+    ['Governorate',       item?.governorate],
+    ['Country of Origin', item?.countryOrigin],
+    ['Arrival Date',      item?.arrivalDate],
+    ['Clearance Status',  item?.clearanceStatus],
+    ['Storage Status',    item?.storageStatus],
+  ];
+
+  const handleAction = (type) => { onAction?.(type, item); onClose(); };
+
   return (
     <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.55)', display: 'flex', alignItems: 'flex-start', justifyContent: 'center', zIndex: 9999, paddingTop: 40 }} onClick={onClose}>
       <div onClick={e => e.stopPropagation()} style={{ width: '92vw', maxWidth: 460, background: '#fff', borderRadius: 20, display: 'flex', flexDirection: 'column', overflow: 'hidden', boxShadow: '0 25px 80px rgba(0,0,0,0.25)', maxHeight: '90vh' }}>
@@ -260,7 +275,9 @@ const ReviewModal = ({ onClose, showError }) => {
         {/* Header */}
         <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', padding: '20px 20px 14px' }}>
           <div>
-            <div style={{ fontWeight: 700, fontSize: 17, color: '#111827' }}>Warehouse Monitoring Request</div>
+            <div style={{ fontWeight: 700, fontSize: 17, color: '#111827' }}>
+              Shipment {item?.id || ''} — Warehouse Monitoring Request
+            </div>
             <div style={{ fontSize: 12, color: '#9CA3AF', marginTop: 3 }}>Request Information</div>
           </div>
           {/* Egypt Logo Placeholder */}
@@ -283,19 +300,10 @@ const ReviewModal = ({ onClose, showError }) => {
         <div style={{ flex: 1, overflowY: 'auto', padding: '20px' }}>
           {activeSection === 'Request Information' && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-              {[
-                ['Request Title',     'Warehouse Registration Request'],
-                ['Company Name',      'Delta Medical Storage'],
-                ['Contact Email',     'Operations@Deltastorage.Com'],
-                ['Request Type',      'Storage Facility Registration'],
-                ['Requested Action',  'Register New Pharmaceutical Storage Warehouse'],
-                ['Warehouse ID',      'WH-REQ-014'],
-                ['Governorate',       'Mansoura'],
-                ['Storage Capacity',  '18,000 Packages'],
-              ].map(([lbl, val]) => (
+              {requestFields.map(([lbl, val]) => (
                 <div key={lbl}>
                   <label style={labelStyle}>{lbl}</label>
-                  <input defaultValue={val} style={fieldStyle} readOnly />
+                  <input defaultValue={val || ''} style={fieldStyle} readOnly />
                 </div>
               ))}
             </div>
@@ -327,78 +335,9 @@ const ReviewModal = ({ onClose, showError }) => {
 
         {/* Footer */}
         <div style={{ display: 'flex', gap: 8, padding: '14px 20px', borderTop: '1px solid #F0F0F0' }}>
-          <button onClick={onClose} style={{ flex: 1, padding: '10px', borderRadius: 10, border: 'none', background: '#EF4444', color: '#fff', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>Reject</button>
-          <button style={{ flex: 1, padding: '10px', borderRadius: 10, border: 'none', background: '#1D4ED8', color: '#fff', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>Review Requests</button>
-          <button style={{ flex: 1, padding: '10px', borderRadius: 10, border: 'none', background: '#F59E0B', color: '#fff', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>Request Inspection</button>
-        </div>
-      </div>
-    </div>
-  );
-};
-
-// ─── Edit Modal ───────────────────────────────────────────────────────────────
-
-const EditModal = ({ item, onClose, onSave }) => {
-  const [form, setForm]     = useState({ ...item });
-  const [saving, setSaving] = useState(false);
-
-  const fields = [
-    { key: 'importedBy',      label: 'Imported By',        type: 'text'   },
-    { key: 'warehouse',       label: 'Assigned Warehouse',  type: 'text'   },
-    { key: 'governorate',     label: 'Governorate',         type: 'text'   },
-    { key: 'clearanceStatus', label: 'Clearance Status',    type: 'select', options: ['Approved','Pending','Under Inspection','Rejected'] },
-    { key: 'storageStatus',   label: 'Storage Status',      type: 'select', options: ['Stored','Under Inspection','In Transit','Awaiting Storage'] },
-  ];
-
-  const fieldStyle = { width: '100%', padding: '9px 12px', borderRadius: 8, border: '1px solid #E5E7EB', fontSize: 13, color: '#374151', background: '#fff', boxSizing: 'border-box', outline: 'none' };
-
-  const handleSave = async () => {
-    setSaving(true);
-    try { await onSave(form); onClose(); }
-    finally { setSaving(false); }
-  };
-
-  return (
-    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.50)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9999 }} onClick={onClose}>
-      <div onClick={e => e.stopPropagation()} style={{ width: '90vw', maxWidth: 520, background: '#fff', borderRadius: 20, overflow: 'hidden', boxShadow: '0 24px 64px rgba(0,0,0,0.20)' }}>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '18px 20px', borderBottom: '1px solid #F0F0F0' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-            <div style={{ width: 36, height: 36, borderRadius: 10, background: '#EFF6FF', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-              <Edit size={16} color="#004399" />
-            </div>
-            <div>
-              <div style={{ fontWeight: 700, fontSize: 15, color: '#111827' }}>Edit Shipment</div>
-              <div style={{ fontSize: 12, color: '#9CA3AF', marginTop: 1 }}>ID: {item.id}</div>
-            </div>
-          </div>
-          <button onClick={onClose} style={{ width: 32, height: 32, borderRadius: 8, border: '1px solid #E5E7EB', background: '#fff', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#6B7280' }}>
-            <X size={15} />
-          </button>
-        </div>
-        <div style={{ padding: 20, display: 'flex', flexDirection: 'column', gap: 14, maxHeight: '55vh', overflowY: 'auto' }}>
-          {fields.map(({ key, label, type, options }) => (
-            <div key={key}>
-              <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#374151', marginBottom: 6 }}>{label}</label>
-              {type === 'select' ? (
-                <div style={{ position: 'relative' }}>
-                  <select value={form[key] || ''} onChange={e => setForm(p => ({ ...p, [key]: e.target.value }))}
-                    style={{ ...fieldStyle, appearance: 'none', WebkitAppearance: 'none', cursor: 'pointer' }}>
-                    {options.map(o => <option key={o} value={o}>{o}</option>)}
-                  </select>
-                  <ChevronDown size={13} style={{ position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)', color: '#9CA3AF', pointerEvents: 'none' }} />
-                </div>
-              ) : (
-                <input type="text" value={form[key] || ''} onChange={e => setForm(p => ({ ...p, [key]: e.target.value }))} style={fieldStyle} />
-              )}
-            </div>
-          ))}
-        </div>
-        <div style={{ display: 'flex', gap: 8, padding: '14px 20px', borderTop: '1px solid #F0F0F0' }}>
-          <button onClick={onClose} style={{ flex: 1, padding: 9, borderRadius: 8, border: '1px solid #E5E7EB', background: '#fff', color: '#374151', fontSize: 13, fontWeight: 500, cursor: 'pointer' }}>Cancel</button>
-          <button onClick={handleSave} disabled={saving}
-            style={{ flex: 2, padding: 9, borderRadius: 8, border: 'none', background: saving ? '#93C5FD' : '#004399', color: '#fff', fontSize: 13, fontWeight: 600, cursor: saving ? 'not-allowed' : 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
-            {saving ? 'Saving…' : <><Check size={14} /> Save Changes</>}
-          </button>
+          <button onClick={() => handleAction('reject')} style={{ flex: 1, padding: '10px', borderRadius: 10, border: 'none', background: '#EF4444', color: '#fff', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>Reject</button>
+          <button onClick={() => handleAction('approve')} style={{ flex: 1, padding: '10px', borderRadius: 10, border: 'none', background: '#1D4ED8', color: '#fff', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>Approve</button>
+          <button onClick={() => handleAction('inspection')} style={{ flex: 1, padding: '10px', borderRadius: 10, border: 'none', background: '#F59E0B', color: '#fff', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>Request Inspection</button>
         </div>
       </div>
     </div>
@@ -481,10 +420,11 @@ const Toast = ({ message, type, onDismiss }) => {
 const WarehouseDashboard = () => {
   const [activeSubTab, setActiveSubTab]       = useState('shipments'); // 'requests' | 'shipments'
   const [reviewOpen, setReviewOpen]           = useState(false);
+  const [reviewItem, setReviewItem]           = useState(null);
   const [drawerOpen, setDrawerOpen]           = useState(false);
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
-  const [editModalOpen, setEditModalOpen]     = useState(false);
   const [isHover, setIsHover]                 = useState(false);
+  const [isRefreshing, setIsRefreshing]       = useState(false);
 
   const [items, setItems]               = useState(MOCK_SHIPMENTS);
   const [activeFilters, setActiveFilters] = useState({ clearanceStatus: 'All', storageStatus: 'All', country: 'All' });
@@ -522,6 +462,19 @@ const WarehouseDashboard = () => {
     } catch (err) { showError('Export failed'); }
   };
 
+  const handleRefresh = () => {
+    setIsRefreshing(true);
+    // Placeholder for a real refetch — swap for an API call when wired up
+    setTimeout(() => {
+      setItems(MOCK_SHIPMENTS);
+      setActiveFilters({ clearanceStatus: 'All', storageStatus: 'All', country: 'All' });
+      setCheckedRows({});
+      setAllChecked(false);
+      setIsRefreshing(false);
+      showToast('Data refreshed');
+    }, 600);
+  };
+
   const handleDelete = () => {
     if (!itemToDelete) return;
     setItems(prev => prev.filter(r => r.id !== itemToDelete.id));
@@ -530,14 +483,29 @@ const WarehouseDashboard = () => {
     setItemToDelete(null);
   };
 
-  const handleSaveEdit = (updated) => {
-    setItems(prev => prev.map(r => r.id === updated.id ? { ...r, ...updated } : r));
-    showToast('Record updated successfully');
-  };
-
   const handleViewDetails  = (item) => { setSelectedItem(item); setDrawerOpen(true); };
-  const handleEditItem     = (item) => { setSelectedItem(item); setEditModalOpen(true); };
   const handleDeletePrompt = (item) => { setItemToDelete(item); setDeleteModalOpen(true); };
+  const handleReviewItem   = (item) => { setReviewItem(item); setReviewOpen(true); };
+
+  const handleReviewAction = (actionType, item) => {
+    if (!item) return;
+    const statusByAction = {
+      approve:    'Approved',
+      reject:     'Rejected',
+      inspection: 'Under Inspection',
+    };
+    const messageByAction = {
+      approve:    `${item.id} request approved`,
+      reject:     `${item.id} request rejected`,
+      inspection: `Inspection requested for ${item.id}`,
+    };
+    const nextStatus = statusByAction[actionType];
+    if (nextStatus) {
+      setItems(prev => prev.map(r => r.id === item.id ? { ...r, clearanceStatus: nextStatus, lastUpdated: 'Just now' } : r));
+    }
+    if (actionType === 'reject') showToast(messageByAction[actionType] || 'Request rejected', 'error');
+    else showToast(messageByAction[actionType] || 'Action completed');
+  };
 
   const handleApplyFilters = (f) => setActiveFilters(f);
   const handleClearFilters = (f) => setActiveFilters(f);
@@ -567,15 +535,18 @@ const WarehouseDashboard = () => {
             </p>
           </div>
 
-          {/* Review Request Button */}
+          {/* Refresh Button — replaces the old global Review Request button.
+              Reviewing now happens per-row from the table itself. */}
           <button
-            onClick={() => setReviewOpen(true)}
+            onClick={handleRefresh}
             onMouseEnter={() => setIsHover(true)}
             onMouseLeave={() => setIsHover(false)}
-            style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '11px 20px', borderRadius: 10, border: 'none', background: 'linear-gradient(135deg, #004399, #1D6FDB)', color: '#fff', fontSize: 14, fontWeight: 600, cursor: 'pointer', boxShadow: isHover ? '0 6px 18px rgba(0,67,153,0.35)' : '0 2px 8px rgba(0,0,0,0.12)', transform: isHover ? 'translateY(-1px)' : 'none', transition: 'all 0.2s' }}>
-            <ClipboardCheck size={16} />
-            Review Request
+            disabled={isRefreshing}
+            style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '11px 20px', borderRadius: 10, border: 'none', background: 'linear-gradient(135deg, #004399, #1D6FDB)', color: '#fff', fontSize: 14, fontWeight: 600, cursor: isRefreshing ? 'not-allowed' : 'pointer', opacity: isRefreshing ? 0.8 : 1, boxShadow: isHover ? '0 6px 18px rgba(0,67,153,0.35)' : '0 2px 8px rgba(0,0,0,0.12)', transform: isHover ? 'translateY(-1px)' : 'none', transition: 'all 0.2s' }}>
+            <RefreshCw size={16} style={{ animation: isRefreshing ? 'spin 0.8s linear infinite' : 'none' }} />
+            {isRefreshing ? 'Refreshing…' : 'Refresh'}
           </button>
+          <style>{`@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }`}</style>
         </div>
 
         {/* ── 4 Stat Cards ── */}
@@ -662,12 +633,13 @@ const WarehouseDashboard = () => {
                   {['Shipment ID', 'Imported By', 'Country of Origin', 'Assigned Warehouse', 'Governorate', 'Country of Origin', 'Arrival Date', 'Clearance Status', 'Last Updated', 'Storage Status'].map(lbl => (
                     <th key={lbl} style={{ padding: '10px 10px', textAlign: 'left', color: '#6B7280', fontWeight: 500, fontSize: 12, whiteSpace: 'nowrap' }}>{lbl}</th>
                   ))}
+                  <th style={{ padding: '10px 10px', textAlign: 'left', color: '#6B7280', fontWeight: 500, fontSize: 12, whiteSpace: 'nowrap' }}>Review</th>
                   <th style={{ width: 40 }} />
                 </tr>
               </thead>
               <tbody>
                 {filtered.length === 0 ? (
-                  <tr><td colSpan={12} style={{ textAlign: 'center', padding: '40px 0', color: '#9CA3AF' }}>No records found</td></tr>
+                  <tr><td colSpan={13} style={{ textAlign: 'center', padding: '40px 0', color: '#9CA3AF' }}>No records found</td></tr>
                 ) : (
                   filtered.map(row => (
                     <tr key={row.id} style={{ borderBottom: '1px solid #F3F4F6', background: checkedRows[row.id] ? '#F0F7FF' : '#fff' }}>
@@ -685,7 +657,15 @@ const WarehouseDashboard = () => {
                       <td style={{ padding: '12px 10px', color: '#9CA3AF', whiteSpace: 'nowrap' }}>{row.lastUpdated}</td>
                       <td style={{ padding: '12px 10px' }}><StorageBadge status={row.storageStatus} /></td>
                       <td style={{ padding: '12px 10px' }}>
-                        <RowMenu row={row} onView={handleViewDetails} onEdit={handleEditItem} onDelete={handleDeletePrompt} />
+                        <button
+                          onClick={() => handleReviewItem(row)}
+                          style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 12px', borderRadius: 8, border: '1px solid #004399', background: '#EFF6FF', color: '#004399', fontSize: 12, fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap' }}>
+                          <ClipboardCheck size={13} />
+                          Review
+                        </button>
+                      </td>
+                      <td style={{ padding: '12px 10px' }}>
+                        <RowMenu row={row} onView={handleViewDetails} onDelete={handleDeletePrompt} />
                       </td>
                     </tr>
                   ))
@@ -706,13 +686,15 @@ const WarehouseDashboard = () => {
       {/* ── Delete Modal ── */}
       {deleteModalOpen && <DeleteModal item={itemToDelete} onClose={() => { setDeleteModalOpen(false); setItemToDelete(null); }} onConfirm={handleDelete} />}
 
-      {/* ── Edit Modal ── */}
-      {editModalOpen && selectedItem && (
-        <EditModal item={selectedItem} onClose={() => { setEditModalOpen(false); setSelectedItem(null); }} onSave={handleSaveEdit} />
+      {/* ── Review Modal — now opened per-row, scoped to the clicked shipment ── */}
+      {reviewOpen && (
+        <ReviewModal
+          item={reviewItem}
+          onClose={() => { setReviewOpen(false); setReviewItem(null); }}
+          showError={showError}
+          onAction={handleReviewAction}
+        />
       )}
-
-      {/* ── Review Modal ── */}
-      {reviewOpen && <ReviewModal onClose={() => setReviewOpen(false)} showError={showError} />}
 
       {/* ── Toast ── */}
       {toast && <Toast message={toast.message} type={toast.type} onDismiss={() => setToast(null)} />}

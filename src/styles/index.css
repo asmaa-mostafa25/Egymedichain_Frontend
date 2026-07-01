@@ -7,38 +7,38 @@
 }
 
 :root {
-  --bg-primary: #f5f9ff;
+  --bg-primary: #f4f8ff;
   --bg-secondary: #eef4fb;
-  --bg-card: rgba(255, 255, 255, 0.96);
+  --bg-card: #ffffff;
   --bg-card-hover: #f8fbff;
-  --bg-input: #f8fbff;
+  --bg-input: #f7faff;
   --bg-sidebar: #061937;
   --bg-sidebar-hover: rgba(255, 255, 255, 0.08);
 
-  --text-primary: #0f172a;
+  --text-primary: #111827;
   --text-secondary: #475569;
   --text-muted: #6b7280;
   --text-white: #ffffff;
 
-  --accent-primary: #0b5fc6;
-  --accent-secondary: #dbeafe;
-  --accent-info: #0ea5e9;
-  --accent-success: #139a57;
-  --accent-warning: #d97706;
-  --accent-danger: #dc2626;
+  --accent-primary: #004399;
+  --accent-secondary: #e8f0ff;
+  --accent-info: #1d4ed8;
+  --accent-success: #0f9d5f;
+  --accent-warning: #f59e0b;
+  --accent-danger: #ef4444;
 
-  --border-primary: #dbe5f2;
-  --border-secondary: #d5e1f3;
+  --border-primary: #e5e7eb;
+  --border-secondary: #dbe5f2;
 
-  --shadow-sm: 0 8px 24px rgba(15, 23, 42, 0.08);
-  --shadow-md: 0 18px 40px rgba(15, 23, 42, 0.12);
-  --shadow-lg: 0 26px 60px rgba(15, 23, 42, 0.14);
-  --shadow-xl: 0 32px 80px rgba(15, 23, 42, 0.16);
-  --shadow-glow: 0 0 0 1px rgba(11, 95, 198, 0.08), 0 18px 38px rgba(11, 95, 198, 0.12);
+  --shadow-sm: 0 8px 24px rgba(2, 20, 48, 0.08);
+  --shadow-md: 0 16px 36px rgba(2, 20, 48, 0.12);
+  --shadow-lg: 0 24px 56px rgba(2, 20, 48, 0.14);
+  --shadow-xl: 0 32px 80px rgba(2, 20, 48, 0.16);
+  --shadow-glow: 0 0 0 1px rgba(0, 67, 153, 0.08), 0 18px 38px rgba(0, 67, 153, 0.12);
 
   --radius-sm: 8px;
-  --radius-md: 14px;
-  --radius-lg: 18px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
   --radius-full: 9999px;
 
   --spacing-xs: 0.25rem;
@@ -87,11 +87,13 @@ html {
 body {
   font-family: var(--font-family);
   background:
-    radial-gradient(circle at top left, rgba(11, 95, 198, 0.12), transparent 18%),
+    radial-gradient(circle at top left, rgba(0, 67, 153, 0.12), transparent 20%),
     linear-gradient(180deg, #f7fbff 0%, #eef4fb 100%);
   color: var(--text-primary);
   line-height: 1.5;
   min-height: 100vh;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
 }
 
 #root {
@@ -108,6 +110,18 @@ input,
 select,
 textarea {
   font: inherit;
+}
+
+button {
+  transition: background-color 180ms ease, color 180ms ease, border-color 180ms ease, transform 180ms ease, box-shadow 180ms ease;
+}
+
+button:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible {
+  outline: 2px solid rgba(0, 67, 153, 0.3);
+  outline-offset: 2px;
 }
 
 ::-webkit-scrollbar {

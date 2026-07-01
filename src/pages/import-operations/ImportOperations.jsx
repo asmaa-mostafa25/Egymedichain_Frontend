@@ -1,4 +1,3 @@
-
 import { useEffect, useState, useCallback, useRef } from 'react';
 import {
   Filter,
@@ -24,6 +23,7 @@ import StatusBadge from '../../components/ui/StatusBadge';
 import Button from '../../components/ui/Button';
 import Modal from '../../components/ui/Modal';
 import Drawer from '../../components/ui/Drawer';
+import ReviewRequestModal from './ReviewRequestModal';
 import * as XLSX from 'xlsx';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -76,8 +76,6 @@ const MOCK_DOCUMENTS = [
   { id: 4, name: 'Shipment Manifest.xlsx',      type: 'XLSX', size: '1.2 MB', date: '2024-03-08', url: null },
 ];
 
-const REVIEW_TABS = ['Request Information', 'Documents'];
-
 // ─── Mock data (swap with API) ─────────────────────────────────────────────────
 const MOCK_ALERTS = [
   { id: 'ALT-001', shipmentId: 'IMP-0567', type: 'Missing Clearance Document', severity: 'High',     status: 'Open'         },
@@ -120,15 +118,6 @@ const StatCard = ({ label, value, sub, icon: Icon, iconBg, iconColor }) => (
     </div>
   </div>
 );
-
-const DocTypeIcon = ({ type }) => {
-  const isPdf = type === 'PDF';
-  return (
-    <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 36, height: 36, borderRadius: 8, background: isPdf ? '#FEE2E2' : '#D1FAE5', color: isPdf ? '#DC2626' : '#059669', fontSize: 11, fontWeight: 700, flexShrink: 0 }}>
-      {type}
-    </span>
-  );
-};
 
 // ─── Filter Dropdown ──────────────────────────────────────────────────────────
 
@@ -248,109 +237,6 @@ const RowMenu = ({ row, onView, onEdit, onDelete }) => {
   );
 };
 
-// ─── Review Modal (Import Operations Request) ─────────────────────────────────
-
-const ReviewModal = ({ onClose }) => {
-  const [activeSection, setActiveSection] = useState('Request Information');
-  const { error: showError } = useNotificationStore();
-
-  const fieldStyle = { width: '100%', padding: '10px 12px', borderRadius: 8, border: '1px solid #E5E7EB', fontSize: 13, color: '#374151', background: '#F9FAFB', boxSizing: 'border-box', outline: 'none' };
-  const labelStyle = { display: 'block', fontSize: 12, fontWeight: 500, color: '#374151', marginBottom: 6 };
-
-  const handleViewDoc = (doc) => {
-    if (!doc.url) { showError('Document not available yet'); return; }
-    window.open(doc.url, '_blank');
-  };
-  const handleDownloadDoc = (doc) => {
-    if (!doc.url) { showError('Document not available for download yet'); return; }
-    const a = document.createElement('a'); a.href = doc.url; a.download = doc.name; a.click();
-  };
-
-  return (
-    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.55)', display: 'flex', alignItems: 'flex-start', justifyContent: 'center', zIndex: 9999, paddingTop: 40 }} onClick={onClose}>
-      <div onClick={e => e.stopPropagation()} style={{ width: '90vw', maxWidth: 960, height: '88vh', background: '#fff', borderRadius: 20, display: 'flex', flexDirection: 'column', overflow: 'hidden', boxShadow: '0 25px 80px rgba(0,0,0,0.25)', animation: 'fadeSlideIn 0.18s ease' }}>
-
-        {/* Header */}
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '18px 20px 14px', borderBottom: '1px solid #F0F0F0' }}>
-          <div>
-            <div style={{ fontWeight: 700, fontSize: 16, color: '#111827' }}>Import Operations Request</div>
-            <div style={{ fontSize: 12, color: '#9CA3AF', marginTop: 2 }}>Request Information</div>
-          </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-            <img src="/images/logo.png" alt="logo" style={{ width: 52, height: 52, objectFit: 'contain' }} />
-            <button onClick={onClose} style={{ width: 36, height: 36, borderRadius: 10, border: '1px solid #E5E7EB', background: '#fff', cursor: 'pointer', color: '#6B7280', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-              <X size={16} />
-            </button>
-          </div>
-        </div>
-
-        {/* Tabs */}
-        <div style={{ display: 'flex', borderBottom: '1px solid #F0F0F0', padding: '0 20px' }}>
-          {REVIEW_TABS.map(tab => (
-            <button key={tab} onClick={() => setActiveSection(tab)}
-              style={{ padding: '12px 16px', border: 'none', borderBottom: activeSection === tab ? '2px solid #004399' : '2px solid transparent', background: 'transparent', cursor: 'pointer', fontSize: 13, fontWeight: activeSection === tab ? 600 : 400, color: activeSection === tab ? '#004399' : '#6B7280', marginBottom: -1, transition: 'all 0.15s' }}>
-              {tab}
-            </button>
-          ))}
-        </div>
-
-        {/* Body */}
-        <div style={{ flex: 1, overflowY: 'auto', padding: 20 }}>
-          {activeSection === 'Request Information' && (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-              {[
-                ['Request Title',      'Pharmaceutical Import Approval'],
-                ['Company Name',       'Pfizer Egypt'],
-                ['Contact Email',      'Imports@Pfizer-Eg.Com'],
-                ['Request Type',       'Import Shipment Registration'],
-                ['Requested Action',   'Customs Clearance Approval'],
-                ['Shipment Reference', 'IMP-REQ-001'],
-                ['Country Of Origin',  'Belgium'],
-                ['Port Of Entry',      'Alexandria Port'],
-              ].map(([lbl, val]) => (
-                <div key={lbl}>
-                  <label style={labelStyle}>{lbl}</label>
-                  <input defaultValue={val} style={fieldStyle} readOnly />
-                </div>
-              ))}
-            </div>
-          )}
-
-          {activeSection === 'Documents' && (
-            <div>
-              <div style={{ fontSize: 13, color: '#6B7280', marginBottom: 16 }}>{MOCK_DOCUMENTS.length} documents attached to this request</div>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                {MOCK_DOCUMENTS.map(doc => (
-                  <div key={doc.id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 14px', borderRadius: 10, border: '1px solid #E5E7EB', background: '#FAFAFA' }}>
-                    <DocTypeIcon type={doc.type} />
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ fontSize: 13, fontWeight: 500, color: '#111827', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{doc.name}</div>
-                      <div style={{ fontSize: 11, color: '#9CA3AF', marginTop: 2 }}>{doc.size} · {doc.date}</div>
-                    </div>
-                    <button onClick={() => handleViewDoc(doc)} style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '6px 12px', borderRadius: 8, border: '1px solid #E5E7EB', background: '#fff', fontSize: 12, color: '#374151', cursor: 'pointer', fontWeight: 500 }}>
-                      <Eye size={12} /> View
-                    </button>
-                    <button onClick={() => handleDownloadDoc(doc)} style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '6px 12px', borderRadius: 8, border: '1px solid #E5E7EB', background: '#fff', fontSize: 12, color: '#374151', cursor: 'pointer', fontWeight: 500 }}>
-                      <Download size={12} /> Download
-                    </button>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-        </div>
-
-        {/* Footer */}
-        <div style={{ display: 'flex', gap: 8, padding: '14px 20px', borderTop: '1px solid #F0F0F0' }}>
-          <button onClick={onClose} style={{ flex: 1, padding: 9, borderRadius: 8, border: '2px solid #EF4444', background: '#fff', color: '#EF4444', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>Reject</button>
-          <button style={{ flex: 1, padding: 9, borderRadius: 8, border: 'none', background: '#004399', color: '#fff', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>Review Requests</button>
-          <button style={{ flex: 1, padding: 9, borderRadius: 8, border: 'none', background: '#F59E0B', color: '#fff', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>Request Inspection</button>
-        </div>
-      </div>
-    </div>
-  );
-};
-
 // ─── Edit Modal ───────────────────────────────────────────────────────────────
 
 const EditModal = ({ item, onClose, onSave }) => {
@@ -436,10 +322,12 @@ const ImportOperations = () => {
 
   const [activeTab, setActiveTab]             = useState('alerts');
   const [reviewOpen, setReviewOpen]           = useState(false);
+  const [reviewItem, setReviewItem]           = useState(null);
   const [drawerOpen, setDrawerOpen]           = useState(false);
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
   const [editModalOpen, setEditModalOpen]     = useState(false);
   const [isHover, setIsHover]                 = useState(false);
+  const [isRefreshing, setIsRefreshing]       = useState(false);
 
   const [loading, setLoading]       = useState(false);
   const [items, setItems]           = useState(MOCK_ALERTS);
@@ -507,6 +395,18 @@ const ImportOperations = () => {
     } catch (err) { console.error(err); showError('Export failed'); }
   };
 
+  const handleRefresh = () => {
+    setIsRefreshing(true);
+    fetchData();
+    fetchStats();
+    setCheckedRows({});
+    setAllChecked(false);
+    setTimeout(() => {
+      setIsRefreshing(false);
+      success('Data refreshed');
+    }, 600);
+  };
+
   const handleDelete = async () => {
     if (!itemToDelete) return;
     try {
@@ -529,9 +429,30 @@ const ImportOperations = () => {
   const handleViewDetails  = (item) => { setSelectedItem(item); setDrawerOpen(true); };
   const handleEditItem     = (item) => { setSelectedItem(item); setEditModalOpen(true); };
   const handleDeletePrompt = (item) => { setItemToDelete(item); setDeleteModalOpen(true); };
+  const handleReviewItem   = (item) => { setReviewItem(item); setReviewOpen(true); };
 
   const handleApplyFilters = (f) => { setActiveFilters(f); setPagination(p => ({ ...p, page: 1 })); };
   const handleClearFilters = (f) => { setActiveFilters(f); setPagination(p => ({ ...p, page: 1 })); };
+
+  const handleReviewAction = (actionType, item) => {
+    if (!item) return;
+    const statusByAction = {
+      approve:    'Approved',
+      reject:     'Rejected',
+      inspection: 'Under Review',
+    };
+    const messageByAction = {
+      approve:    `${item.id} request approved`,
+      reject:     `${item.id} request rejected`,
+      inspection: `Inspection requested for ${item.id}`,
+    };
+    const nextStatus = statusByAction[actionType];
+    if (nextStatus) {
+      setItems(prev => prev.map(r => r.id === item.id ? { ...r, status: nextStatus } : r));
+    }
+    if (actionType === 'reject') showError(messageByAction[actionType] || 'Request rejected');
+    else success(messageByAction[actionType] || 'Action completed');
+  };
 
   const toggleAll = () => {
     if (allChecked) { setCheckedRows({}); setAllChecked(false); }
@@ -563,14 +484,16 @@ const ImportOperations = () => {
             <span style={{ color: '#004399' }}>Imported </span>
             <span style={{ color: '#111827' }}>Medicines</span>
           </h2>
-          <p style={{ marginTop: 8, marginBottom: 0, fontSize: 15, fontWeight: 400, color: '#9CA3AF', maxWidth: 620 }}>
+          <p style={{ marginTop: 10, marginBottom: 0, fontSize: 15, fontWeight: 400, color: '#9CA3AF' }}>
             Monitor imported pharmaceutical shipments, customs clearance, and distribution oversight across Egypt
           </p>
         </div>
         <div style={{ display: 'flex', gap: 10, flexShrink: 0 }}>
-          <button onClick={() => setReviewOpen(true)}
-            style={{ ...baseBtn, border: '1px solid #E5E7EB', background: '#fff', color: '#374151', boxShadow: '0 1px 3px rgba(0,0,0,0.07)' }}>
-            <Eye size={14} /> Review Import Request
+          {/* Refresh Button (replaces the old global Review Import Request button) */}
+          <button onClick={handleRefresh} disabled={isRefreshing}
+            style={{ ...baseBtn, border: '1px solid #E5E7EB', background: '#fff', color: '#374151', boxShadow: '0 1px 3px rgba(0,0,0,0.07)', opacity: isRefreshing ? 0.75 : 1, cursor: isRefreshing ? 'not-allowed' : 'pointer' }}>
+            <RefreshCw size={14} style={{ animation: isRefreshing ? 'spin 0.8s linear infinite' : 'none' }} />
+            {isRefreshing ? 'Refreshing…' : 'Refresh'}
           </button>
           <button onClick={handleExport}
             onMouseEnter={() => setIsHover(true)}
@@ -580,6 +503,7 @@ const ImportOperations = () => {
             {checkedCount > 0 ? `Export (${checkedCount})` : 'Generate Import Report'}
           </button>
         </div>
+        <style>{`@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }`}</style>
       </div>
 
       {/* ── 4 Stat Cards ── */}
@@ -633,14 +557,15 @@ const ImportOperations = () => {
                 {colLabels.map(lbl => (
                   <th key={lbl} style={{ padding: '10px 12px', textAlign: 'left', color: '#6B7280', fontWeight: 500, fontSize: 12, whiteSpace: 'nowrap' }}>{lbl}</th>
                 ))}
+                <th style={{ padding: '10px 12px', textAlign: 'left', color: '#6B7280', fontWeight: 500, fontSize: 12, whiteSpace: 'nowrap' }}>Review</th>
                 <th style={{ width: 40 }} />
               </tr>
             </thead>
             <tbody>
               {loading ? (
-                <tr><td colSpan={colLabels.length + 2} style={{ textAlign: 'center', padding: '40px 0', color: '#9CA3AF' }}>Loading…</td></tr>
+                <tr><td colSpan={colLabels.length + 3} style={{ textAlign: 'center', padding: '40px 0', color: '#9CA3AF' }}>Loading…</td></tr>
               ) : items.length === 0 ? (
-                <tr><td colSpan={colLabels.length + 2} style={{ textAlign: 'center', padding: '40px 0', color: '#9CA3AF' }}>No records found</td></tr>
+                <tr><td colSpan={colLabels.length + 3} style={{ textAlign: 'center', padding: '40px 0', color: '#9CA3AF' }}>No records found</td></tr>
               ) : (
                 items.map(row => (
                   <tr key={row.id} style={{ borderBottom: '1px solid #F3F4F6', background: checkedRows[row.id] ? '#F0F7FF' : '#fff', transition: 'background 0.1s' }}>
@@ -653,6 +578,14 @@ const ImportOperations = () => {
                     <td style={{ padding: '12px 12px' }}><SeverityBadge severity={row.severity} /></td>
                     {!isAlerts && <td style={{ padding: '12px 12px', color: '#374151' }}>{row.country}</td>}
                     <td style={{ padding: '12px 12px' }}><StatusPill status={row.status} /></td>
+                    <td style={{ padding: '12px 12px' }}>
+                      <button
+                        onClick={() => handleReviewItem(row)}
+                        style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 12px', borderRadius: 8, border: '1px solid #004399', background: '#EFF6FF', color: '#004399', fontSize: 12, fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap' }}>
+                        <ClipboardCheck size={13} />
+                        Review
+                      </button>
+                    </td>
                     <td style={{ padding: '12px 12px' }}>
                       <RowMenu row={row} onView={handleViewDetails} onEdit={handleEditItem} onDelete={handleDeletePrompt} />
                     </td>
@@ -709,11 +642,28 @@ const ImportOperations = () => {
         <EditModal item={selectedItem} onClose={() => { setEditModalOpen(false); setSelectedItem(null); }} onSave={handleSaveEdit} />
       )}
 
-      {/* ── Review Modal ── */}
-      {reviewOpen && <ReviewModal onClose={() => setReviewOpen(false)} />}
+      {/* ── Review Modal (shared component, same one used on other pages) ── */}
+      <ReviewRequestModal
+        open={reviewOpen}
+        item={reviewItem}
+        onClose={() => { setReviewOpen(false); setReviewItem(null); }}
+        showError={showError}
+        onAction={handleReviewAction}
+        entityLabel="Import Shipment"
+        headerTitle={`${reviewItem?.id || ''} — Import Operations Request`}
+        requestFields={[
+          ['Request Title',      'Pharmaceutical Import Approval'],
+          ['Record ID',          reviewItem?.id],
+          ['Shipment ID',        reviewItem?.shipmentId],
+          ['Alert / Request Type', reviewItem?.type],
+          ['Severity',            reviewItem?.severity],
+          ['Country of Origin',   reviewItem?.country],
+          ['Status',              reviewItem?.status],
+        ]}
+        documents={MOCK_DOCUMENTS}
+      />
     </div>
   );
 };
 
 export default ImportOperations;
-

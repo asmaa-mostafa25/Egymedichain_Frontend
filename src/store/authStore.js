@@ -36,6 +36,22 @@ const getLoginErrorMessage = (error) => {
   return error?.message || error?.error?.message || 'Login failed';
 };
 
+const extractAuthPayload = (payload) => {
+  if (!payload || typeof payload !== 'object') {
+    return {};
+  }
+
+  const source = payload.data && typeof payload.data === 'object' && !Array.isArray(payload.data)
+    ? payload.data
+    : payload;
+
+  return {
+    token: source.token || source.accessToken || source.access_token || source.jwt || source.jwtToken,
+    refreshToken: source.refreshToken || source.refresh_token || source.refreshTokenValue,
+    user: source.user || source.profile || source.account || source.data?.user || source.data?.profile || source.data?.account,
+  };
+};
+
 const isBackendUnavailable = (error) => {
   const status = error?.status;
   const message = String(getLoginErrorMessage(error)).toLowerCase();
@@ -71,9 +87,20 @@ const useAuthStore = create(
           const response = await authApi.login(credentials);
 
           if (response.success && response.data) {
-            const { token, refreshToken, user } = response.data;
-            const decoded = jwtDecode(token);
-            const role = decoded.role || user?.role;
+            const { token, refreshToken, user } = extractAuthPayload(response.data);
+
+            if (!token || !refreshToken || !user) {
+              throw new Error(response.message || 'Invalid authentication response');
+            }
+
+            let decoded = null;
+            try {
+              decoded = jwtDecode(token);
+            } catch {
+              decoded = null;
+            }
+
+            const role = decoded?.role || user?.role || response.data?.role || response.data?.user?.role;
 
             const session = {
               token,
@@ -98,9 +125,10 @@ const useAuthStore = create(
           const errorMessage = getLoginErrorMessage(error);
 
           if (
+            config.ENABLE_DEMO_AUTH &&
             isBackendUnavailable(error) &&
-            credentials?.email === DEMO_ACCOUNT.email &&
-            credentials?.password === DEMO_ACCOUNT.password
+            credentials?.email &&
+            credentials?.password
           ) {
             const demoSession = createDemoSession();
 
@@ -142,11 +170,17 @@ const useAuthStore = create(
       },
 
       setTokens: (token, refreshToken) => {
-        const decoded = jwtDecode(token);
+        let decoded = null;
+        try {
+          decoded = jwtDecode(token);
+        } catch {
+          decoded = null;
+        }
+
         set({
           token,
           refreshToken,
-          role: decoded.role,
+          role: decoded?.role || null,
           isAuthenticated: true,
         });
         localStorage.setItem(config.TOKEN_KEY, token);

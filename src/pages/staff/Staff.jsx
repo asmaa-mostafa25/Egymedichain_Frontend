@@ -8,6 +8,14 @@ import {
   Shield,
   Eye,
   Trash2,
+  IdCard,
+  Cake,
+  GraduationCap,
+  Briefcase,
+  CalendarDays,
+  ShieldCheck,
+  KeyRound,
+  Info,
 } from 'lucide-react';
 import { useUIStore, useNotificationStore } from '../../store';
 import { staffApi } from '../../api';
@@ -17,6 +25,103 @@ import Button from '../../components/ui/Button';
 import Modal from '../../components/ui/Modal';
 import Drawer from '../../components/ui/Drawer';
 import { SkeletonCard } from '../../components/common/Skeleton';
+
+// ─── Password generation ────────────────────────────────────────────────────
+// Security notes:
+// - Uses crypto.getRandomValues (CSPRNG), NOT Math.random, so the password
+//   cannot be predicted/replayed by an attacker who observes other outputs.
+// - 14 chars drawn from a 70+ character alphabet, with at least one
+//   uppercase / lowercase / digit / symbol guaranteed, giving well over
+//   80 bits of entropy — far beyond what's brute-forceable.
+// - The generated value never gets logged, never rendered in the UI, and is
+//   held in a local variable only for the duration of the API call, then
+//   dropped — it's not kept in component state, so it can't leak via
+//   React devtools, error reports, or a stray console.log elsewhere.
+// - The backend is expected to hash it (e.g. bcrypt/argon2) before storing,
+//   send it to the STAFF MEMBER'S PERSONAL email only (never the new
+//   official one, since that inbox doesn't exist yet), and mark the account
+//   to force a password change on first login — the generated string is a
+//   one-time bootstrap credential, not a long-term password.
+const generateSecurePassword = (length = 14) => {
+  const groups = {
+    lower: 'abcdefghijkmnopqrstuvwxyz',
+    upper: 'ABCDEFGHJKLMNPQRSTUVWXYZ',
+    digit: '23456789',
+    symbol: '!@#$%^&*-_=+?',
+  };
+  const all = Object.values(groups).join('');
+  const randomChar = (charset) => {
+    const bytes = new Uint32Array(1);
+    crypto.getRandomValues(bytes);
+    return charset[bytes[0] % charset.length];
+  };
+
+  // Guarantee at least one of each category, then fill the rest randomly.
+  const required = Object.values(groups).map(randomChar);
+  const rest = Array.from({ length: length - required.length }, () => randomChar(all));
+  const combined = [...required, ...rest];
+
+  // Shuffle (Fisher–Yates) using the same CSPRNG so category order isn't predictable.
+  for (let i = combined.length - 1; i > 0; i--) {
+    const bytes = new Uint32Array(1);
+    crypto.getRandomValues(bytes);
+    const j = bytes[0] % (i + 1);
+    [combined[i], combined[j]] = [combined[j], combined[i]];
+  }
+  return combined.join('');
+};
+
+// Suggests an official ministry email from the staff member's name.
+// Transliterated/Latin names -> "first.last@ministry.gov.eg".
+// The admin can always override this before submitting.
+const suggestOfficialEmail = (fullName) => {
+  const clean = (fullName || '')
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z\s]/g, '') // keep this simple: Latin letters only
+    .split(/\s+/)
+    .filter(Boolean);
+  if (clean.length === 0) return '';
+  const handle = clean.length === 1 ? clean[0] : `${clean[0]}.${clean[clean.length - 1]}`;
+  return `${handle}@ministry.gov.eg`;
+};
+
+const EMPTY_STAFF = {
+  name: '',
+  personalEmail: '',
+  officialEmail: '',
+  phone: '',
+  role: 'INSPECTOR',
+  department: '',
+  facility: '',
+  status: 'active',
+  // ── Fields the Ministry of Health requires on file for every employee ──
+  nationalId: '',
+  dateOfBirth: '',
+  qualification: '',
+  jobGrade: '',
+  hireDate: '',
+  insuranceNumber: '',
+};
+
+const inputStyle = {
+  width: '100%',
+  padding: 'var(--spacing-sm) var(--spacing-md)',
+  backgroundColor: 'var(--bg-secondary)',
+  border: '1px solid var(--border-primary)',
+  borderRadius: 'var(--radius-md)',
+  color: 'var(--text-primary)',
+  fontSize: 'var(--font-size-sm)',
+};
+
+const labelStyle = {
+  display: 'flex',
+  alignItems: 'center',
+  gap: 'var(--spacing-xs)',
+  fontSize: 'var(--font-size-sm)',
+  color: 'var(--text-secondary)',
+  marginBottom: 'var(--spacing-xs)',
+};
 
 const Staff = () => {
   const { setPageTitle, setBreadcrumbs } = useUIStore();
@@ -32,16 +137,8 @@ const Staff = () => {
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
   const [addStaffOpen, setAddStaffOpen] = useState(false);
   const [creatingStaff, setCreatingStaff] = useState(false);
-  const [newStaff, setNewStaff] = useState({
-    name: '',
-    email: '',
-    phone: '',
-    role: 'INSPECTOR',
-    department: '',
-    facility: '',
-    password: '',
-    status: 'active',
-  });
+  const [officialEmailTouched, setOfficialEmailTouched] = useState(false);
+  const [newStaff, setNewStaff] = useState(EMPTY_STAFF);
 
   useEffect(() => {
     setPageTitle('Staff Management');
@@ -88,29 +185,62 @@ const Staff = () => {
     setDrawerOpen(true);
   };
 
+  const handleNameChange = (value) => {
+    setNewStaff((prev) => ({
+      ...prev,
+      name: value,
+      // Keep the suggested official email in sync unless the admin has
+      // deliberately overridden it.
+      officialEmail: officialEmailTouched ? prev.officialEmail : suggestOfficialEmail(value),
+    }));
+  };
+
+  const handleOfficialEmailChange = (value) => {
+    setOfficialEmailTouched(true);
+    setNewStaff((prev) => ({ ...prev, officialEmail: value }));
+  };
+
+  const resetAddStaffForm = () => {
+    setNewStaff(EMPTY_STAFF);
+    setOfficialEmailTouched(false);
+  };
+
+  const isValidEmail = (value) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value || '');
+
   const handleAddStaff = async () => {
-    if (!newStaff.name || !newStaff.email || !newStaff.password) {
-      showError('Name, email, and password are required');
+    if (!newStaff.name || !newStaff.personalEmail || !newStaff.officialEmail || !newStaff.nationalId) {
+      showError('الاسم، الإيميل الشخصي، الإيميل الرسمي، والرقم القومي حقول إجبارية');
+      return;
+    }
+    if (!isValidEmail(newStaff.personalEmail)) {
+      showError('من فضلك ادخل إيميل شخصي صحيح — هيتبعتله بيانات الدخول');
+      return;
+    }
+    if (!isValidEmail(newStaff.officialEmail)) {
+      showError('من فضلك ادخل إيميل رسمي صحيح');
       return;
     }
 
+    // Generated fresh, right before the request — never stored in state,
+    // never rendered, and sent to the backend over the (assumed) TLS API
+    // connection. The backend hashes it before persisting and emails the
+    // plaintext once to the staff member's personal address only, with a
+    // forced password-change requirement on first login.
+    const temporaryPassword = generateSecurePassword();
+
     try {
       setCreatingStaff(true);
-      const response = await staffApi.create(newStaff);
+      const response = await staffApi.create({
+        ...newStaff,
+        password: temporaryPassword,
+        forcePasswordReset: true,
+        sendCredentialsTo: 'personalEmail',
+      });
 
       if (response.success) {
-        success('Staff member added successfully');
+        success(`تم إنشاء الحساب — الإيميل الرسمي وكلمة السر اتبعتوا على ${newStaff.personalEmail}`);
         setAddStaffOpen(false);
-        setNewStaff({
-          name: '',
-          email: '',
-          phone: '',
-          role: 'INSPECTOR',
-          department: '',
-          facility: '',
-          password: '',
-          status: 'active',
-        });
+        resetAddStaffForm();
         setPagination((prev) => ({ ...prev, page: 1 }));
         fetchStaff();
       } else {
@@ -171,7 +301,7 @@ const Staff = () => {
           </div>
           <div>
             <div style={{ fontWeight: 500, color: 'var(--text-primary)' }}>{value}</div>
-            <div style={{ fontSize: 'var(--font-size-xs)', color: 'var(--text-muted)' }}>{row.email}</div>
+            <div style={{ fontSize: 'var(--font-size-xs)', color: 'var(--text-muted)' }}>{row.officialEmail || row.email}</div>
           </div>
         </div>
       )
@@ -444,9 +574,16 @@ const Staff = () => {
               <div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--spacing-xs)', marginBottom: 'var(--spacing-xs)' }}>
                   <Mail size={14} style={{ color: 'var(--text-muted)' }} />
-                  <span style={{ fontSize: 'var(--font-size-xs)', color: 'var(--text-muted)', textTransform: 'uppercase' }}>Email</span>
+                  <span style={{ fontSize: 'var(--font-size-xs)', color: 'var(--text-muted)', textTransform: 'uppercase' }}>Official Email</span>
                 </div>
-                <div style={{ fontSize: 'var(--font-size-sm)', color: 'var(--text-primary)' }}>{selectedStaff.email}</div>
+                <div style={{ fontSize: 'var(--font-size-sm)', color: 'var(--text-primary)' }}>{selectedStaff.officialEmail || selectedStaff.email}</div>
+              </div>
+              <div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--spacing-xs)', marginBottom: 'var(--spacing-xs)' }}>
+                  <Mail size={14} style={{ color: 'var(--text-muted)' }} />
+                  <span style={{ fontSize: 'var(--font-size-xs)', color: 'var(--text-muted)', textTransform: 'uppercase' }}>Personal Email</span>
+                </div>
+                <div style={{ fontSize: 'var(--font-size-sm)', color: 'var(--text-primary)' }}>{selectedStaff.personalEmail || '-'}</div>
               </div>
               <div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--spacing-xs)', marginBottom: 'var(--spacing-xs)' }}>
@@ -454,6 +591,48 @@ const Staff = () => {
                   <span style={{ fontSize: 'var(--font-size-xs)', color: 'var(--text-muted)', textTransform: 'uppercase' }}>Phone</span>
                 </div>
                 <div style={{ fontSize: 'var(--font-size-sm)', color: 'var(--text-primary)' }}>{selectedStaff.phone || '-'}</div>
+              </div>
+              <div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--spacing-xs)', marginBottom: 'var(--spacing-xs)' }}>
+                  <IdCard size={14} style={{ color: 'var(--text-muted)' }} />
+                  <span style={{ fontSize: 'var(--font-size-xs)', color: 'var(--text-muted)', textTransform: 'uppercase' }}>National ID</span>
+                </div>
+                <div style={{ fontSize: 'var(--font-size-sm)', color: 'var(--text-primary)' }}>{selectedStaff.nationalId || '-'}</div>
+              </div>
+              <div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--spacing-xs)', marginBottom: 'var(--spacing-xs)' }}>
+                  <Cake size={14} style={{ color: 'var(--text-muted)' }} />
+                  <span style={{ fontSize: 'var(--font-size-xs)', color: 'var(--text-muted)', textTransform: 'uppercase' }}>Date of Birth</span>
+                </div>
+                <div style={{ fontSize: 'var(--font-size-sm)', color: 'var(--text-primary)' }}>{selectedStaff.dateOfBirth || '-'}</div>
+              </div>
+              <div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--spacing-xs)', marginBottom: 'var(--spacing-xs)' }}>
+                  <GraduationCap size={14} style={{ color: 'var(--text-muted)' }} />
+                  <span style={{ fontSize: 'var(--font-size-xs)', color: 'var(--text-muted)', textTransform: 'uppercase' }}>Qualification</span>
+                </div>
+                <div style={{ fontSize: 'var(--font-size-sm)', color: 'var(--text-primary)' }}>{selectedStaff.qualification || '-'}</div>
+              </div>
+              <div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--spacing-xs)', marginBottom: 'var(--spacing-xs)' }}>
+                  <Briefcase size={14} style={{ color: 'var(--text-muted)' }} />
+                  <span style={{ fontSize: 'var(--font-size-xs)', color: 'var(--text-muted)', textTransform: 'uppercase' }}>Job Grade</span>
+                </div>
+                <div style={{ fontSize: 'var(--font-size-sm)', color: 'var(--text-primary)' }}>{selectedStaff.jobGrade || '-'}</div>
+              </div>
+              <div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--spacing-xs)', marginBottom: 'var(--spacing-xs)' }}>
+                  <CalendarDays size={14} style={{ color: 'var(--text-muted)' }} />
+                  <span style={{ fontSize: 'var(--font-size-xs)', color: 'var(--text-muted)', textTransform: 'uppercase' }}>Hire Date</span>
+                </div>
+                <div style={{ fontSize: 'var(--font-size-sm)', color: 'var(--text-primary)' }}>{selectedStaff.hireDate || '-'}</div>
+              </div>
+              <div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--spacing-xs)', marginBottom: 'var(--spacing-xs)' }}>
+                  <ShieldCheck size={14} style={{ color: 'var(--text-muted)' }} />
+                  <span style={{ fontSize: 'var(--font-size-xs)', color: 'var(--text-muted)', textTransform: 'uppercase' }}>Insurance Number</span>
+                </div>
+                <div style={{ fontSize: 'var(--font-size-sm)', color: 'var(--text-primary)' }}>{selectedStaff.insuranceNumber || '-'}</div>
               </div>
               <div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--spacing-xs)', marginBottom: 'var(--spacing-xs)' }}>
@@ -495,190 +674,210 @@ const Staff = () => {
         </div>
       </Modal>
 
+      {/* Add Staff Modal */}
       <Modal
         isOpen={addStaffOpen}
-        onClose={() => setAddStaffOpen(false)}
+        onClose={() => { setAddStaffOpen(false); resetAddStaffForm(); }}
         title="Add Staff Member"
         size="lg"
         footer={
           <>
-            <Button variant="secondary" onClick={() => setAddStaffOpen(false)}>
+            <Button variant="secondary" onClick={() => { setAddStaffOpen(false); resetAddStaffForm(); }}>
               Cancel
             </Button>
             <Button variant="primary" onClick={handleAddStaff} loading={creatingStaff}>
-              Create Staff Member
+              Create & Send Credentials
             </Button>
           </>
         }
       >
-        <div style={{ display: 'grid', gap: 'var(--spacing-md)' }}>
+        <div style={{ display: 'grid', gap: 'var(--spacing-lg)' }}>
+
+          {/* ── Identity ── */}
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 'var(--spacing-md)' }}>
             <div>
-              <label style={{ display: 'block', fontSize: 'var(--font-size-sm)', color: 'var(--text-secondary)', marginBottom: 'var(--spacing-xs)' }}>
-                Full Name
-              </label>
+              <label style={labelStyle}>Full Name</label>
               <input
                 type="text"
                 value={newStaff.name}
-                onChange={(e) => setNewStaff((prev) => ({ ...prev, name: e.target.value }))}
+                onChange={(e) => handleNameChange(e.target.value)}
                 placeholder="e.g. Adam Youssef"
-                style={{
-                  width: '100%',
-                  padding: 'var(--spacing-sm) var(--spacing-md)',
-                  backgroundColor: 'var(--bg-secondary)',
-                  border: '1px solid var(--border-primary)',
-                  borderRadius: 'var(--radius-md)',
-                  color: 'var(--text-primary)',
-                  fontSize: 'var(--font-size-sm)',
-                }}
+                style={inputStyle}
               />
             </div>
             <div>
-              <label style={{ display: 'block', fontSize: 'var(--font-size-sm)', color: 'var(--text-secondary)', marginBottom: 'var(--spacing-xs)' }}>
-                Email Address
-              </label>
+              <label style={labelStyle}><IdCard size={14} /> National ID (الرقم القومي)</label>
               <input
-                type="email"
-                value={newStaff.email}
-                onChange={(e) => setNewStaff((prev) => ({ ...prev, email: e.target.value }))}
-                placeholder="staff@ministry.gov.eg"
-                style={{
-                  width: '100%',
-                  padding: 'var(--spacing-sm) var(--spacing-md)',
-                  backgroundColor: 'var(--bg-secondary)',
-                  border: '1px solid var(--border-primary)',
-                  borderRadius: 'var(--radius-md)',
-                  color: 'var(--text-primary)',
-                  fontSize: 'var(--font-size-sm)',
-                }}
+                type="text"
+                value={newStaff.nationalId}
+                onChange={(e) => setNewStaff((prev) => ({ ...prev, nationalId: e.target.value }))}
+                placeholder="29001011234567"
+                maxLength={14}
+                style={inputStyle}
               />
             </div>
             <div>
-              <label style={{ display: 'block', fontSize: 'var(--font-size-sm)', color: 'var(--text-secondary)', marginBottom: 'var(--spacing-xs)' }}>
-                Phone Number
-              </label>
+              <label style={labelStyle}><Cake size={14} /> Date of Birth</label>
+              <input
+                type="date"
+                value={newStaff.dateOfBirth}
+                onChange={(e) => setNewStaff((prev) => ({ ...prev, dateOfBirth: e.target.value }))}
+                style={inputStyle}
+              />
+            </div>
+            <div>
+              <label style={labelStyle}>Phone Number</label>
               <input
                 type="tel"
                 value={newStaff.phone}
                 onChange={(e) => setNewStaff((prev) => ({ ...prev, phone: e.target.value }))}
                 placeholder="+20 100 000 0000"
-                style={{
-                  width: '100%',
-                  padding: 'var(--spacing-sm) var(--spacing-md)',
-                  backgroundColor: 'var(--bg-secondary)',
-                  border: '1px solid var(--border-primary)',
-                  borderRadius: 'var(--radius-md)',
-                  color: 'var(--text-primary)',
-                  fontSize: 'var(--font-size-sm)',
-                }}
-              />
-            </div>
-            <div>
-              <label style={{ display: 'block', fontSize: 'var(--font-size-sm)', color: 'var(--text-secondary)', marginBottom: 'var(--spacing-xs)' }}>
-                Role
-              </label>
-              <select
-                value={newStaff.role}
-                onChange={(e) => setNewStaff((prev) => ({ ...prev, role: e.target.value }))}
-                style={{
-                  width: '100%',
-                  padding: 'var(--spacing-sm) var(--spacing-md)',
-                  backgroundColor: 'var(--bg-secondary)',
-                  border: '1px solid var(--border-primary)',
-                  borderRadius: 'var(--radius-md)',
-                  color: 'var(--text-primary)',
-                  fontSize: 'var(--font-size-sm)',
-                }}
-              >
-                <option value="INSPECTOR">Inspector</option>
-                <option value="ANALYST">Analyst</option>
-                <option value="AUDITOR">Auditor</option>
-                <option value="SUPER_ADMIN">Super Admin</option>
-                <option value="MOH_ADMIN">MOH Admin</option>
-              </select>
-            </div>
-            <div>
-              <label style={{ display: 'block', fontSize: 'var(--font-size-sm)', color: 'var(--text-secondary)', marginBottom: 'var(--spacing-xs)' }}>
-                Department
-              </label>
-              <input
-                type="text"
-                value={newStaff.department}
-                onChange={(e) => setNewStaff((prev) => ({ ...prev, department: e.target.value }))}
-                placeholder="Operations"
-                style={{
-                  width: '100%',
-                  padding: 'var(--spacing-sm) var(--spacing-md)',
-                  backgroundColor: 'var(--bg-secondary)',
-                  border: '1px solid var(--border-primary)',
-                  borderRadius: 'var(--radius-md)',
-                  color: 'var(--text-primary)',
-                  fontSize: 'var(--font-size-sm)',
-                }}
-              />
-            </div>
-            <div>
-              <label style={{ display: 'block', fontSize: 'var(--font-size-sm)', color: 'var(--text-secondary)', marginBottom: 'var(--spacing-xs)' }}>
-                Facility
-              </label>
-              <input
-                type="text"
-                value={newStaff.facility}
-                onChange={(e) => setNewStaff((prev) => ({ ...prev, facility: e.target.value }))}
-                placeholder="Cairo Central"
-                style={{
-                  width: '100%',
-                  padding: 'var(--spacing-sm) var(--spacing-md)',
-                  backgroundColor: 'var(--bg-secondary)',
-                  border: '1px solid var(--border-primary)',
-                  borderRadius: 'var(--radius-md)',
-                  color: 'var(--text-primary)',
-                  fontSize: 'var(--font-size-sm)',
-                }}
+                style={inputStyle}
               />
             </div>
           </div>
+
+          {/* ── Contact & account (this is what gets emailed) ── */}
           <div>
-            <label style={{ display: 'block', fontSize: 'var(--font-size-sm)', color: 'var(--text-secondary)', marginBottom: 'var(--spacing-xs)' }}>
-              Temporary Password
-            </label>
-            <input
-              type="password"
-              value={newStaff.password}
-              onChange={(e) => setNewStaff((prev) => ({ ...prev, password: e.target.value }))}
-              placeholder="Set initial password"
+            <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--spacing-xs)', marginBottom: 'var(--spacing-sm)', color: 'var(--text-muted)', fontSize: 'var(--font-size-xs)', textTransform: 'uppercase', fontWeight: 600 }}>
+              <KeyRound size={13} /> Account & Login
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 'var(--spacing-md)' }}>
+              <div>
+                <label style={labelStyle}><Mail size={14} /> Personal Email</label>
+                <input
+                  type="email"
+                  value={newStaff.personalEmail}
+                  onChange={(e) => setNewStaff((prev) => ({ ...prev, personalEmail: e.target.value }))}
+                  placeholder="employee@gmail.com"
+                  style={inputStyle}
+                />
+              </div>
+              <div>
+                <label style={labelStyle}><Mail size={14} /> Official Email (auto-suggested, editable)</label>
+                <input
+                  type="email"
+                  value={newStaff.officialEmail}
+                  onChange={(e) => handleOfficialEmailChange(e.target.value)}
+                  placeholder="firstname.lastname@ministry.gov.eg"
+                  style={inputStyle}
+                />
+              </div>
+            </div>
+            <div
               style={{
-                width: '100%',
+                display: 'flex',
+                gap: 'var(--spacing-xs)',
+                alignItems: 'flex-start',
+                marginTop: 'var(--spacing-sm)',
                 padding: 'var(--spacing-sm) var(--spacing-md)',
                 backgroundColor: 'var(--bg-secondary)',
                 border: '1px solid var(--border-primary)',
                 borderRadius: 'var(--radius-md)',
-                color: 'var(--text-primary)',
-                fontSize: 'var(--font-size-sm)',
-              }}
-            />
-          </div>
-          <div>
-            <label style={{ display: 'block', fontSize: 'var(--font-size-sm)', color: 'var(--text-secondary)', marginBottom: 'var(--spacing-xs)' }}>
-              Status
-            </label>
-            <select
-              value={newStaff.status}
-              onChange={(e) => setNewStaff((prev) => ({ ...prev, status: e.target.value }))}
-              style={{
-                width: '100%',
-                padding: 'var(--spacing-sm) var(--spacing-md)',
-                backgroundColor: 'var(--bg-secondary)',
-                border: '1px solid var(--border-primary)',
-                borderRadius: 'var(--radius-md)',
-                color: 'var(--text-primary)',
-                fontSize: 'var(--font-size-sm)',
+                fontSize: 'var(--font-size-xs)',
+                color: 'var(--text-muted)',
               }}
             >
-              <option value="active">Active</option>
-              <option value="inactive">Inactive</option>
-              <option value="suspended">Suspended</option>
-            </select>
+              <Info size={14} style={{ flexShrink: 0, marginTop: 1 }} />
+              <span>
+                هيتولّد باسورد آمن تلقائيًا وهيتبعت مع الإيميل الرسمي على البريد الشخصي المكتوب فوق بس —
+                مفيش حد بيشوفه في الشاشة، وهيتطلب من الموظف يغيّره أول ما يسجّل دخول.
+              </span>
+            </div>
+          </div>
+
+          {/* ── Employment details the Ministry keeps on file ── */}
+          <div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--spacing-xs)', marginBottom: 'var(--spacing-sm)', color: 'var(--text-muted)', fontSize: 'var(--font-size-xs)', textTransform: 'uppercase', fontWeight: 600 }}>
+              <Briefcase size={13} /> Employment Details
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 'var(--spacing-md)' }}>
+              <div>
+                <label style={labelStyle}>Role</label>
+                <select
+                  value={newStaff.role}
+                  onChange={(e) => setNewStaff((prev) => ({ ...prev, role: e.target.value }))}
+                  style={inputStyle}
+                >
+                  <option value="INSPECTOR">Inspector</option>
+                  <option value="ANALYST">Analyst</option>
+                  <option value="AUDITOR">Auditor</option>
+                  <option value="SUPER_ADMIN">Super Admin</option>
+                  <option value="MOH_ADMIN">MOH Admin</option>
+                </select>
+              </div>
+              <div>
+                <label style={labelStyle}><GraduationCap size={14} /> Qualification (المؤهل الدراسي)</label>
+                <input
+                  type="text"
+                  value={newStaff.qualification}
+                  onChange={(e) => setNewStaff((prev) => ({ ...prev, qualification: e.target.value }))}
+                  placeholder="e.g. Bachelor of Pharmacy"
+                  style={inputStyle}
+                />
+              </div>
+              <div>
+                <label style={labelStyle}><Briefcase size={14} /> Job Grade (الدرجة الوظيفية)</label>
+                <input
+                  type="text"
+                  value={newStaff.jobGrade}
+                  onChange={(e) => setNewStaff((prev) => ({ ...prev, jobGrade: e.target.value }))}
+                  placeholder="e.g. Grade A / First Class"
+                  style={inputStyle}
+                />
+              </div>
+              <div>
+                <label style={labelStyle}><CalendarDays size={14} /> Hire Date (تاريخ التعيين)</label>
+                <input
+                  type="date"
+                  value={newStaff.hireDate}
+                  onChange={(e) => setNewStaff((prev) => ({ ...prev, hireDate: e.target.value }))}
+                  style={inputStyle}
+                />
+              </div>
+              <div>
+                <label style={labelStyle}><ShieldCheck size={14} /> Insurance Number (الرقم التأميني)</label>
+                <input
+                  type="text"
+                  value={newStaff.insuranceNumber}
+                  onChange={(e) => setNewStaff((prev) => ({ ...prev, insuranceNumber: e.target.value }))}
+                  placeholder="e.g. 123456789"
+                  style={inputStyle}
+                />
+              </div>
+              <div>
+                <label style={labelStyle}><Building size={14} /> Department</label>
+                <input
+                  type="text"
+                  value={newStaff.department}
+                  onChange={(e) => setNewStaff((prev) => ({ ...prev, department: e.target.value }))}
+                  placeholder="Operations"
+                  style={inputStyle}
+                />
+              </div>
+              <div>
+                <label style={labelStyle}>Facility</label>
+                <input
+                  type="text"
+                  value={newStaff.facility}
+                  onChange={(e) => setNewStaff((prev) => ({ ...prev, facility: e.target.value }))}
+                  placeholder="Cairo Central"
+                  style={inputStyle}
+                />
+              </div>
+              <div>
+                <label style={labelStyle}>Status</label>
+                <select
+                  value={newStaff.status}
+                  onChange={(e) => setNewStaff((prev) => ({ ...prev, status: e.target.value }))}
+                  style={inputStyle}
+                >
+                  <option value="active">Active</option>
+                  <option value="inactive">Inactive</option>
+                  <option value="suspended">Suspended</option>
+                </select>
+              </div>
+            </div>
           </div>
         </div>
       </Modal>

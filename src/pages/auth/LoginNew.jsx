@@ -13,16 +13,8 @@ const validateLoginForm = ({ email, password }) => {
     return "Please enter your email";
   }
 
-  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmedEmail)) {
-    return "Please enter a valid email address";
-  }
-
   if (!trimmedPassword) {
     return "Please enter your password";
-  }
-
-  if (trimmedPassword.length < 6) {
-    return "Password must be at least 6 characters";
   }
 
   return "";

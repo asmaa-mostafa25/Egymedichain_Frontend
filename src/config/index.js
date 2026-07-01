@@ -1,8 +1,12 @@
 // Environment configuration
+const env = import.meta.env;
+const isDemoAuthEnabled = env.VITE_ENABLE_DEMO_AUTH === undefined ? true : env.VITE_ENABLE_DEMO_AUTH === 'true';
+
 const config = {
   // API Configuration
-  API_BASE_URL: import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000/api',
-  API_TIMEOUT: 30000,
+  API_BASE_URL: env.VITE_API_BASE_URL || 'http://localhost:8000/api',
+  API_TIMEOUT: Number(env.VITE_API_TIMEOUT || 30000),
+  ENABLE_DEMO_AUTH: isDemoAuthEnabled,
   
   // Authentication
   TOKEN_KEY: 'egy_medichain_token',
