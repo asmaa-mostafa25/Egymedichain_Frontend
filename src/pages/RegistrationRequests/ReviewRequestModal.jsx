@@ -70,13 +70,38 @@ const ReviewRequestModal = ({
         }}
       >
         <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', padding: '20px 20px 14px' }}>
-          <div>
-            <div style={{ fontWeight: 700, fontSize: 17, color: '#111827' }}>{headerTitle}</div>
-            <div style={{ fontSize: 12, color: '#9CA3AF', marginTop: 3 }}>{entityLabel} request</div>
+          <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12 }}>
+            <div
+  style={{
+    width: 56,
+    height: 56,
+    borderRadius: '50%',
+    overflow: 'hidden',
+    flexShrink: 0,
+    border: '2px solid #E5E7EB',
+  }}
+>
+  <img
+    src="/images/logo.png"
+    alt="Hospital"
+    style={{
+      width: '100%',
+      height: '100%',
+      objectFit: 'cover',
+    }}
+  />
+</div>
+            <div>
+              <div style={{ fontWeight: 700, fontSize: 17, color: '#111827' }}>{headerTitle}</div>
+              <div style={{ fontSize: 12, color: '#9CA3AF', marginTop: 3 }}>{entityLabel} request</div>
+            </div>
           </div>
-          <div style={{ width: 56, height: 56, borderRadius: '50%', background: 'linear-gradient(135deg, #DC2626, #1D4ED8)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-            <span style={{ color: '#fff', fontSize: 18 }}>🏥</span>
-          </div>
+          <button
+            onClick={onClose}
+            style={{ width: 32, height: 32, borderRadius: 8, border: '1px solid #E5E7EB', background: '#fff', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#6B7280', flexShrink: 0 }}
+          >
+            <X size={15} />
+          </button>
         </div>
 
         <div style={{ display: 'flex', borderBottom: '1px solid #F0F0F0', padding: '0 20px' }}>

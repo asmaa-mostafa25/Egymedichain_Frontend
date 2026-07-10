@@ -10,24 +10,23 @@ const { ROLES } = config;
 
 // Lazy load pages
 const Login = lazy(() => import('../pages/auth/LoginNew'));
-const HomePage = lazy(() => import('../pages/HomePage/HomePage'));
-const Dashboard = lazy(() => import('../pages/dashboard/Dashboard'));
-const Monitoring = lazy(() => import('../pages/monitoring/Monitoring'));
-// const Inventory = lazy(() => import('../pages/inventory/Inventory'));
-const Shipments = lazy(() => import('../pages/shipments/Shipments'));
-const Approvals = lazy(() => import('../pages/approvals/Approvals'));
-const Reports = lazy(() => import('../pages/reports/Reports'));
+const Overview  = lazy(() => import('../pages/Overview/Overview'));
+const RegistrationRequests = lazy(() => import('../pages/RegistrationRequests/registrationrequests'));
+const AdminAudit = lazy(() => import('../pages/admin-audit/Admin&Audit'));
+
+
+
+
 const Staff = lazy(() => import('../pages/staff/Staff'));
-const ManufacturingOversight = lazy(() => import('../pages/manufacturing-oversight/ManufacturingOversight'));
+const Alerts = lazy(() => import('../pages/alerts-public-scans/Alerts&PublicScans'));
+const ProfilePage = lazy(() => import('../pages/settings/ProfilePage'));
 const Settings = lazy(() => import('../pages/settings/Settings'));
-const AuditLogs = lazy(() => import('../pages/audit/AuditLogs'));
+
 const Unauthorized = lazy(() => import('../pages/errors/Unauthorized'));
 const NotFound = lazy(() => import('../pages/errors/NotFound'));
-const ImportOperations = lazy(() =>
-  import('../pages/import-operations/ImportOperations')
-);
-const WarehouseMonitoring = lazy(() => import('../pages/warehouse-monitoring/WarehouseMonitoring'));
-const PharmacyCompliance = lazy(() => import('../pages/pharmacy-compliance/PharmacyCompliance'));
+
+const MedicineBatchManagement = lazy(() => import('../pages/medicine-batch-monitoring/Medicine&BatchMonitoring'));
+const EntitiesManagement = lazy(() => import('../pages/entities-management/EntitiesManagement'));
 const VerifyEmail = lazy(() => import('../pages/FrogetPassword/VerifyEmail'));
 const ForgetPassword = lazy(() => import('../pages/FrogetPassword/ForgetPassword'));
 const ResetPassword = lazy(() => import('../pages/FrogetPassword/ResetPassword'));
@@ -40,6 +39,10 @@ const SuspenseWrapper = ({ children }) => (
     {children}
   </Suspense>
 );    
+
+
+
+     
 
 
 
@@ -58,84 +61,61 @@ export const router = createBrowserRouter([
     children: [
       {
         index: true,
-        element: <Navigate to="/home" replace />,
+        element: <Navigate to="/overview" replace />,
       },
       // ✅ Home page
       {
-        path: 'home',
+        path: 'overview',
         element: (
           <SuspenseWrapper>
-            <HomePage />
+            <Overview />
           </SuspenseWrapper>
         ),
       },
       {
-        path: 'warehouse-monitoring',
+        path: 'medicine-batch-monitoring',
         element: (
           <SuspenseWrapper>
-            <WarehouseMonitoring />
+            <MedicineBatchManagement />
           </SuspenseWrapper>
         ),
       },
 
       {
-path: 'pharmacy-compliance',
+        path: 'entities-management/*',
         element: (
           <SuspenseWrapper>
-            <PharmacyCompliance />
+            <EntitiesManagement />
           </SuspenseWrapper>
         ),
       },
       {
-        path: 'dashboard',
+        path: 'registrationrequests',
         element: (
           <SuspenseWrapper>
-            <Dashboard />
+            <RegistrationRequests />
           </SuspenseWrapper>
         ),
       },
       {
-        path: 'monitoring',
+        path: 'admin-audit',
         element: (
           <SuspenseWrapper>
-            <Monitoring />
+            <AdminAudit />
           </SuspenseWrapper>
         ),
       },
       {
-        path: 'manufacturing-oversight',
+        path: 'alerts-public-scans',
         element: (
           <SuspenseWrapper>
-            <ManufacturingOversight />
+            <Alerts />
           </SuspenseWrapper>
         ),
       },
-      {
-        path: 'shipments',
-        element: (
-          <SuspenseWrapper>
-            <Shipments />
-          </SuspenseWrapper>
-        ),
-      },
-      {
-        path: 'approvals',
-        element: (
-          <ProtectedRoute allowedRoles={[...adminRoles, ROLES.AUDITOR]}>
-            <SuspenseWrapper>
-              <Approvals />
-            </SuspenseWrapper>
-          </ProtectedRoute>
-        ),
-      },
-      {
-        path: 'reports',
-        element: (
-          <SuspenseWrapper>
-            <Reports />
-          </SuspenseWrapper>
-        ),
-      },
+     
+      
+      
       {
         path: 'staff',
         element: (
@@ -146,16 +126,7 @@ path: 'pharmacy-compliance',
           </ProtectedRoute>
         ),
       },
-      {
-        path: 'audit',
-        element: (
-          <ProtectedRoute allowedRoles={[...adminRoles, ROLES.AUDITOR]}>
-            <SuspenseWrapper>
-              <AuditLogs />
-            </SuspenseWrapper>
-          </ProtectedRoute>
-        ),
-      },
+      
       {
         path: 'settings',
         element: (
@@ -167,15 +138,18 @@ path: 'pharmacy-compliance',
         ),
       },
       {
-        path: 'import-operations',
+        path: 'profile',
         element: (
           <ProtectedRoute allowedRoles={allRoles}>
             <SuspenseWrapper>
-              <ImportOperations />
+              <ProfilePage />
             </SuspenseWrapper>
           </ProtectedRoute>
         ),
       },
+      
+      
+     
     ],
   },
   {

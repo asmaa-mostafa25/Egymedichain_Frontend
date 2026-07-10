@@ -1,5 +1,8 @@
 import { create } from 'zustand';
 
+const countUnread = (notifications) =>
+  notifications.filter((n) => !n.read).length;
+
 const useNotificationStore = create((set, get) => ({
   // Toasts
   toasts: [],
@@ -10,7 +13,7 @@ const useNotificationStore = create((set, get) => ({
   // System notifications
   notifications: [],
 
-  // Unread count
+  // Unread count — always derived from `notifications`, never set by hand
   unreadCount: 0,
 
   // Add toast
@@ -80,15 +83,15 @@ const useNotificationStore = create((set, get) => ({
   // Clear all alerts
   clearAlerts: () => set({ alerts: [] }),
 
-  // Set notifications
+  // Set notifications (e.g. after fetching from the API)
   setNotifications: (notifications) => {
     set({
       notifications,
-      unreadCount: notifications.filter((n) => !n.read).length,
+      unreadCount: countUnread(notifications),
     });
   },
 
-  // Add notification
+  // Add notification (e.g. real-time push / websocket event)
   addNotification: (notification) => {
     const newNotification = {
       id: Date.now() + Math.random(),
@@ -97,20 +100,26 @@ const useNotificationStore = create((set, get) => ({
       ...notification,
     };
 
-    set((state) => ({
-      notifications: [newNotification, ...state.notifications],
-      unreadCount: state.unreadCount + 1,
-    }));
+    set((state) => {
+      const notifications = [newNotification, ...state.notifications];
+      return {
+        notifications,
+        unreadCount: countUnread(notifications),
+      };
+    });
   },
 
   // Mark notification as read
   markAsRead: (id) => {
-    set((state) => ({
-      notifications: state.notifications.map((n) =>
+    set((state) => {
+      const notifications = state.notifications.map((n) =>
         n.id === id ? { ...n, read: true } : n
-      ),
-      unreadCount: Math.max(0, state.unreadCount - 1),
-    }));
+      );
+      return {
+        notifications,
+        unreadCount: countUnread(notifications),
+      };
+    });
   },
 
   // Mark all as read
@@ -124,12 +133,10 @@ const useNotificationStore = create((set, get) => ({
   // Remove notification
   removeNotification: (id) => {
     set((state) => {
-      const notification = state.notifications.find((n) => n.id === id);
+      const notifications = state.notifications.filter((n) => n.id !== id);
       return {
-        notifications: state.notifications.filter((n) => n.id !== id),
-        unreadCount: notification && !notification.read
-          ? Math.max(0, state.unreadCount - 1)
-          : state.unreadCount,
+        notifications,
+        unreadCount: countUnread(notifications),
       };
     });
   },

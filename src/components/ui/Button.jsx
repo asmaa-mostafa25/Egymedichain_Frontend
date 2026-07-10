@@ -16,11 +16,11 @@ const Button = ({
 }) => {
   const variants = {
     primary: {
-      background: 'linear-gradient(135deg, var(--accent-primary) 0%, #00A896 100%)',
-      color: '#0A0F1C',
-      border: 'none',
-      hoverBackground: 'linear-gradient(135deg, #00A896 0%, var(--accent-primary) 100%)',
-    },
+  background: 'linear-gradient(135deg, #004399 0%, #005FCC 100%)',
+  color: '#fff',
+  border: 'none',
+  hoverBackground: 'linear-gradient(135deg, #00337A 0%, #004399 100%)',
+},
     secondary: {
       background: 'var(--accent-secondary)',
       color: 'var(--text-primary)',

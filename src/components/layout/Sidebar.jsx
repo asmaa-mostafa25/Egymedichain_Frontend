@@ -1,7 +1,7 @@
+import { useState } from 'react';
 import { NavLink, useLocation, useNavigate } from 'react-router-dom';
-import { 
-  ChevronLeft, 
-  ChevronRight, 
+import {
+  ChevronDown,
   LogOut,
   Settings,
 } from 'lucide-react';
@@ -12,7 +12,9 @@ const Sidebar = () => {
   const location = useLocation();
   const navigate = useNavigate();
   const { user, role, logout } = useAuthStore();
-  const { sidebarCollapsed, toggleSidebar } = useUIStore();
+  const { sidebarCollapsed } = useUIStore();
+
+ 
 
   const navigation = getNavigationForRole(role);
 
@@ -23,6 +25,11 @@ const Sidebar = () => {
   const handleSettings = () => {
     navigate('/settings');
   };
+
+  const isPathActive = (path) =>
+    path &&
+    (location.pathname === path ||
+      (path !== '/dashboard' && location.pathname.startsWith(path)));
 
   return (
     <aside
@@ -52,16 +59,16 @@ const Sidebar = () => {
         }}
       >
         <img
-  src="/images/Frame.png"
-  alt="EMC"
-  style={{
-    width: '42px',
-    height: '42px',
-    borderRadius: '10px',
-    objectFit: 'cover',
-    flexShrink: 0,
-  }}
-/>
+          src="/images/Frame.png"
+          alt="EMC"
+          style={{
+            width: '42px',
+            height: '42px',
+            borderRadius: '10px',
+            objectFit: 'cover',
+            flexShrink: 0,
+          }}
+        />
 
         {!sidebarCollapsed && (
           <div className="animate-fadeIn">
@@ -88,13 +95,13 @@ const Sidebar = () => {
         {!sidebarCollapsed && (
           <div
             style={{
-              fontSize: '9px',
-              color: 'rgba(255,255,255,0.4)',
-              fontWeight: 600,
-              letterSpacing: '0.08em',
+              fontSize: '10.5px',
+              color: 'rgba(255,255,255,0.45)',
+              fontWeight: 700,
+              letterSpacing: '0.06em',
               textTransform: 'uppercase',
-              padding: '0 8px',
-              marginBottom: '6px',
+              padding: '0 10px',
+              marginBottom: '8px',
               whiteSpace: 'nowrap',
             }}
           >
@@ -105,9 +112,107 @@ const Sidebar = () => {
         <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
           {navigation.map((item) => {
             const Icon = item.icon;
-            const isActive =
-              location.pathname === item.path ||
-              (item.path !== '/dashboard' && location.pathname.startsWith(item.path));
+            const hasChildren = !!item.children?.length;
+            const isActive = isPathActive(item.path);
+           
+            const childActive =
+              hasChildren && item.children.some((child) => isPathActive(child.path));
+
+            if (hasChildren) {
+              return (
+                <div key={item.id}>
+                 <button
+    onClick={() => navigate(item.children[0].path)}
+
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '10px',
+                      width: '100%',
+                      padding: '9px 10px',
+                      borderRadius: '8px',
+                      border: 'none',
+                      cursor: 'pointer',
+                      backgroundColor: childActive ? '#fff' : 'transparent',
+color: childActive ? '#004399' : 'rgba(255,255,255,0.65)',
+                      textDecoration: 'none',
+                      transition: 'all var(--transition-fast)',
+                      justifyContent: sidebarCollapsed ? 'center' : 'flex-start',
+                      fontWeight: childActive ? 600 : 400,
+                      fontSize: '13.5px',
+                    }}
+                   onMouseEnter={(e) => {
+  if (!childActive) {
+    e.currentTarget.style.backgroundColor = '#fff';
+    e.currentTarget.style.color = '#004399';
+  }
+}}
+                    onMouseLeave={(e) => {
+                      if (!childActive) {
+                        e.currentTarget.style.backgroundColor = 'transparent';
+                        e.currentTarget.style.color = 'rgba(255,255,255,0.65)';
+                      }
+                    }}
+                  >
+                    <Icon size={18} style={{ flexShrink: 0 }} />
+
+                    {!sidebarCollapsed && (
+                      <>
+                        <span style={{ flex: 1, textAlign: 'left', lineHeight: 1.25, whiteSpace: 'nowrap',
+    overflow: 'hidden',
+    textOverflow: 'ellipsis', }}>
+                          {item.label}
+                        </span>
+                       
+                        
+                      </>
+                    )}
+                  </button>
+
+                  {/* ── Children: plain text list, no icons, indented under the parent label ── */}
+                  {!sidebarCollapsed && (
+    <div
+        style={{
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '2px',
+            marginTop: '6px',
+            marginLeft: '18px',
+            paddingLeft: '14px',
+            borderLeft: '2px solid rgba(255,255,255,.25)',
+        }}
+    >
+        {item.children.map((child) => {
+            const childIsActive = isPathActive(child.path);
+
+            return (
+                <NavLink
+                    key={child.id}
+                    to={child.path}
+                    style={{
+                        display: 'block',
+                        padding: '7px 10px',
+                        borderRadius: '6px',
+                        color: childIsActive
+                            ? '#fff'
+                            : 'rgba(255,255,255,.65)',
+                        textDecoration: 'none',
+                        background: childIsActive
+                            ? 'rgba(255,255,255,.12)'
+                            : 'transparent',
+                        fontSize: '12.5px',
+                        fontWeight: childIsActive ? 600 : 400,
+                    }}
+                >
+                    {child.label}
+                </NavLink>
+            );
+        })}
+    </div>
+)}
+                </div>
+              );
+            }
 
             return (
               <NavLink
@@ -119,14 +224,14 @@ const Sidebar = () => {
                   gap: '10px',
                   padding: '9px 10px',
                   borderRadius: '8px',
-                  color: isActive ? '#fff' : 'rgba(255,255,255,0.65)',
-                  backgroundColor: isActive ? 'rgba(255,255,255,0.18)' : 'transparent',
+                  color: isActive ? '#004399' : 'rgba(255,255,255,0.65)',
+                  backgroundColor: isActive ? '#fff' : 'transparent',
                   textDecoration: 'none',
                   transition: 'all var(--transition-fast)',
                   position: 'relative',
                   justifyContent: sidebarCollapsed ? 'center' : 'flex-start',
                   fontWeight: isActive ? 600 : 400,
-                  fontSize: '13px',
+                  fontSize: '12.5px',
                 }}
                 onMouseEnter={(e) => {
                   if (!isActive) {
@@ -145,7 +250,9 @@ const Sidebar = () => {
 
                 {!sidebarCollapsed && (
                   <>
-                    <span style={{ whiteSpace: 'nowrap', flex: 1 }}>
+                    <span style={{ flex: 1, lineHeight: 1.25, whiteSpace: 'nowrap',
+    overflow: 'hidden',
+    textOverflow: 'ellipsis', }}>
                       {item.label}
                     </span>
 
@@ -184,13 +291,13 @@ const Sidebar = () => {
         }}
       >
         <hr
-  style={{
-    border: 'none',
-    height: '1px',
-    background: 'rgba(255,255,255,0.15)',
-    margin: '8px 0 12px',
-  }}
-/>
+          style={{
+            border: 'none',
+            height: '1px',
+            background: 'rgba(255,255,255,0.15)',
+            margin: '8px 0 12px',
+          }}
+        />
         {/* Settings */}
         <button
           onClick={handleSettings}
@@ -206,7 +313,7 @@ const Sidebar = () => {
             cursor: 'pointer',
             backgroundColor: location.pathname === '/settings' ? 'rgba(255,255,255,0.18)' : 'transparent',
             color: location.pathname === '/settings' ? '#fff' : 'rgba(255,255,255,0.65)',
-            fontSize: '13px',
+            fontSize: '13.5px',
             marginBottom: '2px',
             transition: 'all var(--transition-fast)',
             fontWeight: location.pathname === '/settings' ? 600 : 400,
@@ -243,7 +350,7 @@ const Sidebar = () => {
             cursor: 'pointer',
             backgroundColor: 'transparent',
             color: 'rgba(255,255,255,0.65)',
-            fontSize: '13px',
+            fontSize: '13.5px',
             marginBottom: '12px',
             transition: 'all var(--transition-fast)',
           }}
@@ -259,99 +366,60 @@ const Sidebar = () => {
           <LogOut size={18} style={{ flexShrink: 0 }} />
           {!sidebarCollapsed && <span>Log Out</span>}
         </button>
-<hr
-  style={{
-    border: 'none',
-    height: '1px',
-    background: 'rgba(255,255,255,0.15)',
-    margin: '12px 0 0',
-  }}
-/>
+        <hr
+          style={{
+            border: 'none',
+            height: '1px',
+            background: 'rgba(255,255,255,0.15)',
+            margin: '12px 0 0',
+          }}
+        />
         {/* Ministry badge */}
-       {!sidebarCollapsed && (
-  <div
-  style={{
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: '12px',
-    width: '100%',
-  }}
->
-  <div
-    style={{
-      display: 'flex',
-      flexDirection: 'column',
-      textAlign: 'right',
-    }}
-  >
-    <div
-      style={{
-       fontSize: '16px',
-fontWeight: 800,
-        color: '#fff',
-        
-      }}
-    >
-      وزارة الصحة والسكان
-    </div>
-
-    <div
-      style={{
-       fontSize: '9px',
-fontWeight: 600,
-        color: '#fff',
-        
-        whiteSpace: 'nowrap', // يمنع النزول لسطر جديد
-      }}
-    >
-      Ministry of Health & Population
-    </div>
-  </div>
-
-  <img
-    src="/images/logo.png"
-    alt="Logo"
-    style={{
-      width: 65,
-      height: 65,
-      objectFit: 'contain',
-    }}
-  />
-</div>
-)}
+        {!sidebarCollapsed && (
+          <div
+            style={{
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              textAlign: 'center',
+              gap: '8px',
+              width: '100%',
+              paddingTop: '10px',
+            }}
+          >
+            <img
+              src="/images/logo.png"
+              alt="Logo"
+              style={{
+                width: 44,
+                height: 44,
+                objectFit: 'contain',
+              }}
+            />
+            <div>
+              <div
+                style={{
+                  fontSize: '12px',
+                  fontWeight: 700,
+                  color: '#fff',
+                }}
+              >
+                وزارة الصحة والسكان
+              </div>
+              <div
+                style={{
+                  fontSize: '9px',
+                  fontWeight: 500,
+                  color: 'rgba(255,255,255,0.75)',
+                  whiteSpace: 'nowrap',
+                }}
+              >
+                Ministry of Health & Population
+              </div>
+            </div>
+          </div>
+        )}
       </div>
-
-      {/* ── Collapse toggle ── */}
-      <button
-        onClick={toggleSidebar}
-        style={{
-          position: 'absolute',
-          right: '-12px',
-          top: '50%',
-          transform: 'translateY(-50%)',
-          width: '24px',
-          height: '24px',
-          borderRadius: '50%',
-          backgroundColor: '#004399',
-          border: '2px solid rgba(255,255,255,0.3)',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          cursor: 'pointer',
-          color: '#fff',
-          transition: 'all var(--transition-fast)',
-          zIndex: 10,
-        }}
-        onMouseEnter={(e) => {
-          e.currentTarget.style.backgroundColor = '#0055CC';
-        }}
-        onMouseLeave={(e) => {
-          e.currentTarget.style.backgroundColor = '#004399';
-        }}
-      >
-        {sidebarCollapsed ? <ChevronRight size={14} /> : <ChevronLeft size={14} />}
-      </button>
     </aside>
   );
 };

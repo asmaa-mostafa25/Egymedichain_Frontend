@@ -5,28 +5,22 @@ import { useNavigate } from "react-router-dom";
 
 const modules = [
   {
-    image: "/images/imported-medicines.png",
-    // title: "Imported Medicines",
-    // subtitle: "Global Supply Network",
-    route: "/imported-medicines",
-  },
-  {
     image: "/images/manufacturing.png",
-    // title: "Manufacturing",
+    title: "Manufacturing",
     // subtitle: "Production Facility",
-    route: "/manufacturing",
+    route: "/entities-management?tab=factories",
   },
   {
     image: "/images/storage.png",
-    // title: "Storage",
+    title: "Storage",
     // subtitle: "Central Warehouse",
-    route: "/inventory",
+    route: "/entities-management?tab=warehouses",
   },
   {
     image: "/images/pharmacy.png",
-    // title: "Pharmacy",
+    title: "Pharmacy",
     // subtitle: "Point of Sale",
-    route: "/monitoring",
+    route: "/entities-management?tab=pharmacies",
   },
 ];
 
@@ -86,8 +80,10 @@ export default function HomePage() {
 
         <div style={{
           display: "grid",
-          gridTemplateColumns: "repeat(4, 1fr)",
-          gap: "16px",
+          gridTemplateColumns: "repeat(3, 1fr)",
+          gap: "20px",
+          maxWidth: "900px",
+          margin: "0 auto",
         }}>
           {modules.map((item, index) => (
             <div

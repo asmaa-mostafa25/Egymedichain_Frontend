@@ -34,7 +34,8 @@ const Topbar = () => {
 
   const { user, role, logout } = useAuthStore();
 
-  const { toggleMobileSidebar } = useUIStore();
+  // toggleSidebar is what Sidebar.jsx actually reads (sidebarCollapsed)
+  const { toggleSidebar } = useUIStore();
 
   const {
     notifications,
@@ -98,9 +99,9 @@ const Topbar = () => {
           zIndex: 100,
         }}
       >
-        {/* Menu */}
+        {/* Menu — toggles the Sidebar open/closed (collapsed) */}
         <button
-          onClick={toggleMobileSidebar}
+          onClick={toggleSidebar}
           style={iconBtn}
         >
           <Menu size={20} />
@@ -274,6 +275,9 @@ const Topbar = () => {
                             borderBottom:
                               "1px solid #F3F4F6",
                             cursor: "pointer",
+                            background: notification.read
+                              ? "transparent"
+                              : "#F0F6FF",
                           }}
                         >
                           <div
@@ -406,11 +410,7 @@ const Topbar = () => {
                   }
                 />
 
-                <MenuItem
-                  icon={<FileText size={16} />}
-                  text="Generate PDF Report"
-                  onClick={handleGenerateReport}
-                />
+                
 
                 <hr />
 

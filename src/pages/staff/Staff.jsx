@@ -16,6 +16,7 @@ import {
   ShieldCheck,
   KeyRound,
   Info,
+  RotateCcw,
 } from 'lucide-react';
 import { useUIStore, useNotificationStore } from '../../store';
 import { staffApi } from '../../api';
@@ -38,10 +39,11 @@ import { SkeletonCard } from '../../components/common/Skeleton';
 //   dropped — it's not kept in component state, so it can't leak via
 //   React devtools, error reports, or a stray console.log elsewhere.
 // - The backend is expected to hash it (e.g. bcrypt/argon2) before storing,
-//   send it to the STAFF MEMBER'S PERSONAL email only (never the new
-//   official one, since that inbox doesn't exist yet), and mark the account
-//   to force a password change on first login — the generated string is a
-//   one-time bootstrap credential, not a long-term password.
+//   send it to the STAFF MEMBER'S PERSONAL email only (never the official
+//   one, since that inbox may be inaccessible if they're locked out), and
+//   mark the account to force a password change on first login — the
+//   generated string is a one-time bootstrap credential, not a long-term
+//   password.
 const generateSecurePassword = (length = 14) => {
   const groups = {
     lower: 'abcdefghijkmnopqrstuvwxyz',
@@ -139,6 +141,11 @@ const Staff = () => {
   const [creatingStaff, setCreatingStaff] = useState(false);
   const [officialEmailTouched, setOfficialEmailTouched] = useState(false);
   const [newStaff, setNewStaff] = useState(EMPTY_STAFF);
+
+  // ── Reset Password state ────────────────────────────────────────────────
+  const [resetPasswordOpen, setResetPasswordOpen] = useState(false);
+  const [resettingPassword, setResettingPassword] = useState(false);
+  const [resetTarget, setResetTarget] = useState(null);
 
   useEffect(() => {
     setPageTitle('Staff Management');
@@ -266,6 +273,53 @@ const Staff = () => {
     }
   };
 
+  // ── Reset Password: admin-initiated, for staff who lost/forgot access ──
+  // Same generation + delivery model as account creation: a fresh CSPRNG
+  // password is created, sent once to the staff member's personal email,
+  // and never shown on screen or kept in state.
+  const openResetPassword = (member) => {
+    setResetTarget(member);
+    setResetPasswordOpen(true);
+  };
+
+  const closeResetPassword = () => {
+    if (resettingPassword) return; // don't allow closing mid-request
+    setResetPasswordOpen(false);
+    setResetTarget(null);
+  };
+
+  const handleResetPassword = async () => {
+    if (!resetTarget) return;
+
+    if (!resetTarget.personalEmail) {
+      showError('لا يوجد إيميل شخصي مسجل لهذا الموظف — من فضلك حدّثه أولًا قبل إعادة تعيين كلمة السر');
+      return;
+    }
+
+    const newPassword = generateSecurePassword();
+
+    try {
+      setResettingPassword(true);
+      const response = await staffApi.resetPassword(resetTarget.id, {
+        password: newPassword,
+        forcePasswordReset: true,
+        sendCredentialsTo: 'personalEmail',
+      });
+
+      if (response.success) {
+        success(`تم تغيير كلمة السر — الباسورد الجديد اتبعت على ${resetTarget.personalEmail}`);
+        setResetPasswordOpen(false);
+        setResetTarget(null);
+      } else {
+        showError(response.message || 'فشل تغيير كلمة السر');
+      }
+    } catch (err) {
+      showError(err.message || 'فشل تغيير كلمة السر');
+    } finally {
+      setResettingPassword(false);
+    }
+  };
+
   const getRoleColor = (role) => {
     const colors = {
       'MOH_ADMIN': 'var(--accent-danger)',
@@ -276,6 +330,18 @@ const Staff = () => {
     };
     return colors[role] || 'var(--text-muted)';
   };
+
+  const iconButtonStyle = (color) => ({
+    padding: 'var(--spacing-xs)',
+    backgroundColor: 'transparent',
+    border: 'none',
+    color,
+    cursor: 'pointer',
+    borderRadius: 'var(--radius-sm)',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+  });
 
   const columns = [
     { 
@@ -342,32 +408,27 @@ const Staff = () => {
     {
       key: 'actions',
       label: '',
-      width: '100px',
+      width: '130px',
       render: (_, row) => (
         <div style={{ display: 'flex', gap: 'var(--spacing-xs)' }}>
           <button
+            title="View Details"
             onClick={() => handleViewDetails(row)}
-            style={{
-              padding: 'var(--spacing-xs)',
-              backgroundColor: 'transparent',
-              border: 'none',
-              color: 'var(--text-muted)',
-              cursor: 'pointer',
-              borderRadius: 'var(--radius-sm)',
-            }}
+            style={iconButtonStyle('var(--text-muted)')}
           >
             <Eye size={16} />
           </button>
           <button
+            title="Reset Password"
+            onClick={() => openResetPassword(row)}
+            style={iconButtonStyle('var(--accent-warning)')}
+          >
+            <KeyRound size={16} />
+          </button>
+          <button
+            title="Remove"
             onClick={() => { setSelectedStaff(row); setDeleteModalOpen(true); }}
-            style={{
-              padding: 'var(--spacing-xs)',
-              backgroundColor: 'transparent',
-              border: 'none',
-              color: 'var(--accent-danger)',
-              cursor: 'pointer',
-              borderRadius: 'var(--radius-sm)',
-            }}
+            style={iconButtonStyle('var(--accent-danger)')}
           >
             <Trash2 size={16} />
           </button>
@@ -385,36 +446,50 @@ const Staff = () => {
 
   return (
     <div className="animate-fadeIn">
-      {/* Header */}
-      <div
+  {/* Header */}
+  <div
+    style={{
+      display: 'flex',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      marginBottom: '32px',
+    }}
+  >
+    <div>
+      <h1
         style={{
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          marginBottom: 'var(--spacing-lg)',
+          margin: 0,
+          fontSize: '38px',
+          fontWeight: 800,
+          lineHeight: 1.15,
+          letterSpacing: '-0.5px',
         }}
       >
-        <div>
-          <h1
-            style={{
-              fontSize: 'var(--font-size-2xl)',
-              fontWeight: 700,
-              color: 'var(--text-primary)',
-              marginBottom: 'var(--spacing-xs)',
-            }}
-          >
-            Staff Management
-          </h1>
-          <p style={{ fontSize: 'var(--font-size-sm)', color: 'var(--text-muted)' }}>
-            Manage system users and their access permissions
-          </p>
-        </div>
-        <Button variant="primary" leftIcon={Plus} onClick={() => setAddStaffOpen(true)}>
-          Add Staff Member
-        </Button>
-      </div>
+        <span style={{ color: '#004399' }}>Staff </span>
+        <span style={{ color: '#111827' }}>Management</span>
+      </h1>
 
-      {/* Stats Cards */}
+      <p
+        style={{
+          marginTop: '8px',
+          fontSize: '15px',
+          color: 'var(--text-muted)',
+        }}
+      >
+        Manage system users and their access permissions
+      </p>
+    </div>
+
+    <Button
+      variant="primary"
+      icon={Plus}
+      onClick={() => setAddStaffOpen(true)}
+    >
+      Add Staff Member
+    </Button>
+  </div>
+
+  {/* Stats Cards */}
       <div
         style={{
           display: 'grid',
@@ -547,27 +622,47 @@ const Staff = () => {
       >
         {selectedStaff && (
           <div style={{ padding: 'var(--spacing-md)' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--spacing-lg)', marginBottom: 'var(--spacing-xl)' }}>
-              <div
-                style={{
-                  width: '64px',
-                  height: '64px',
-                  borderRadius: 'var(--radius-full)',
-                  backgroundColor: 'var(--accent-secondary)',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  fontSize: 'var(--font-size-xl)',
-                  fontWeight: 600,
-                  color: 'var(--text-primary)',
-                }}
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                gap: 'var(--spacing-lg)',
+                marginBottom: 'var(--spacing-xl)',
+                flexWrap: 'wrap',
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--spacing-lg)' }}>
+                <div
+                  style={{
+                    width: '64px',
+                    height: '64px',
+                    borderRadius: 'var(--radius-full)',
+                    backgroundColor: 'var(--accent-secondary)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    fontSize: 'var(--font-size-xl)',
+                    fontWeight: 600,
+                    color: 'var(--text-primary)',
+                  }}
+                >
+                  {selectedStaff.name?.charAt(0)}
+                </div>
+                <div>
+                  <div style={{ fontSize: 'var(--font-size-lg)', fontWeight: 600, color: 'var(--text-primary)' }}>{selectedStaff.name}</div>
+                  <div style={{ fontSize: 'var(--font-size-sm)', color: 'var(--text-muted)' }}>{selectedStaff.role?.replace('_', ' ')}</div>
+                </div>
+              </div>
+
+              <Button
+                variant="secondary"
+                size="sm"
+                leftIcon={KeyRound}
+                onClick={() => openResetPassword(selectedStaff)}
               >
-                {selectedStaff.name?.charAt(0)}
-              </div>
-              <div>
-                <div style={{ fontSize: 'var(--font-size-lg)', fontWeight: 600, color: 'var(--text-primary)' }}>{selectedStaff.name}</div>
-                <div style={{ fontSize: 'var(--font-size-sm)', color: 'var(--text-muted)' }}>{selectedStaff.role?.replace('_', ' ')}</div>
-              </div>
+                Reset Password
+              </Button>
             </div>
 
             <div style={{ display: 'grid', gap: 'var(--spacing-lg)' }}>
@@ -674,6 +769,91 @@ const Staff = () => {
         </div>
       </Modal>
 
+      {/* Reset Password Modal */}
+      <Modal
+        isOpen={resetPasswordOpen}
+        onClose={closeResetPassword}
+        title="Reset Password"
+        size="sm"
+      >
+        {resetTarget && (
+          <div>
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 'var(--spacing-md)',
+                marginBottom: 'var(--spacing-lg)',
+                padding: 'var(--spacing-md)',
+                backgroundColor: 'var(--bg-secondary)',
+                borderRadius: 'var(--radius-md)',
+              }}
+            >
+              <div
+                style={{
+                  width: '40px',
+                  height: '40px',
+                  borderRadius: 'var(--radius-full)',
+                  backgroundColor: 'var(--accent-secondary)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  fontWeight: 600,
+                  color: 'var(--text-primary)',
+                  flexShrink: 0,
+                }}
+              >
+                {resetTarget.name?.charAt(0)}
+              </div>
+              <div>
+                <div style={{ fontSize: 'var(--font-size-sm)', fontWeight: 600, color: 'var(--text-primary)' }}>{resetTarget.name}</div>
+                <div style={{ fontSize: 'var(--font-size-xs)', color: 'var(--text-muted)' }}>{resetTarget.officialEmail || resetTarget.email}</div>
+              </div>
+            </div>
+
+            <p style={{ color: 'var(--text-secondary)', fontSize: 'var(--font-size-sm)', marginBottom: 'var(--spacing-md)' }}>
+              هيتولّد باسورد جديد آمن تلقائيًا لهذا الموظف، وهيتلغي الباسورد القديم فورًا.
+            </p>
+
+            <div
+              style={{
+                display: 'flex',
+                gap: 'var(--spacing-xs)',
+                alignItems: 'flex-start',
+                padding: 'var(--spacing-sm) var(--spacing-md)',
+                backgroundColor: 'var(--bg-secondary)',
+                border: '1px solid var(--border-primary)',
+                borderRadius: 'var(--radius-md)',
+                fontSize: 'var(--font-size-xs)',
+                color: 'var(--text-muted)',
+                marginBottom: 'var(--spacing-lg)',
+              }}
+            >
+              <Info size={14} style={{ flexShrink: 0, marginTop: 1 }} />
+              <span>
+                الباسورد الجديد هيتبعت مباشرة على البريد الشخصي:{' '}
+                <strong style={{ color: 'var(--text-primary)' }}>{resetTarget.personalEmail || 'غير مسجل'}</strong>
+                {' '}— وهيتطلب من الموظف يغيّره أول ما يسجّل دخول. مفيش حد بيشوف الباسورد في الشاشة.
+              </span>
+            </div>
+
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 'var(--spacing-sm)' }}>
+              <Button variant="secondary" onClick={closeResetPassword} disabled={resettingPassword}>
+                Cancel
+              </Button>
+              <Button
+                variant="primary"
+                leftIcon={RotateCcw}
+                onClick={handleResetPassword}
+                loading={resettingPassword}
+              >
+                Reset & Send
+              </Button>
+            </div>
+          </div>
+        )}
+      </Modal>
+
       {/* Add Staff Modal */}
       <Modal
         isOpen={addStaffOpen}
@@ -693,55 +873,160 @@ const Staff = () => {
       >
         <div style={{ display: 'grid', gap: 'var(--spacing-lg)' }}>
 
-          {/* ── Identity ── */}
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 'var(--spacing-md)' }}>
-            <div>
-              <label style={labelStyle}>Full Name</label>
-              <input
-                type="text"
-                value={newStaff.name}
-                onChange={(e) => handleNameChange(e.target.value)}
-                placeholder="e.g. Adam Youssef"
-                style={inputStyle}
-              />
+          {/* ── Live ID-badge preview — mirrors the Ministry staff card this record will produce ── */}
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 'var(--spacing-md)',
+              padding: 'var(--spacing-md) var(--spacing-lg)',
+              backgroundColor: 'var(--bg-secondary)',
+              border: '1px dashed var(--border-primary)',
+              borderRadius: 'var(--radius-lg)',
+            }}
+          >
+            <div
+              style={{
+                width: '48px',
+                height: '48px',
+                borderRadius: 'var(--radius-full)',
+                backgroundColor: 'var(--accent-secondary)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                fontSize: 'var(--font-size-lg)',
+                fontWeight: 600,
+                color: 'var(--text-primary)',
+                flexShrink: 0,
+              }}
+            >
+              {newStaff.name?.trim()?.charAt(0)?.toUpperCase() || '?'}
             </div>
-            <div>
-              <label style={labelStyle}><IdCard size={14} /> National ID (الرقم القومي)</label>
-              <input
-                type="text"
-                value={newStaff.nationalId}
-                onChange={(e) => setNewStaff((prev) => ({ ...prev, nationalId: e.target.value }))}
-                placeholder="29001011234567"
-                maxLength={14}
-                style={inputStyle}
-              />
+            <div style={{ minWidth: 0, flex: 1 }}>
+              <div style={{ fontSize: 'var(--font-size-md)', fontWeight: 600, color: 'var(--text-primary)' }}>
+                {newStaff.name || 'New staff member'}
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--spacing-xs)', fontSize: 'var(--font-size-xs)', color: getRoleColor(newStaff.role) }}>
+                <Shield size={12} />
+                {newStaff.role?.replace('_', ' ')}
+                {newStaff.department && <span style={{ color: 'var(--text-muted)' }}>· {newStaff.department}</span>}
+              </div>
             </div>
-            <div>
-              <label style={labelStyle}><Cake size={14} /> Date of Birth</label>
-              <input
-                type="date"
-                value={newStaff.dateOfBirth}
-                onChange={(e) => setNewStaff((prev) => ({ ...prev, dateOfBirth: e.target.value }))}
-                style={inputStyle}
-              />
-            </div>
-            <div>
-              <label style={labelStyle}>Phone Number</label>
-              <input
-                type="tel"
-                value={newStaff.phone}
-                onChange={(e) => setNewStaff((prev) => ({ ...prev, phone: e.target.value }))}
-                placeholder="+20 100 000 0000"
-                style={inputStyle}
-              />
+            <div style={{ textAlign: 'right', flexShrink: 0 }}>
+              <div style={{ fontSize: 'var(--font-size-xs)', color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: 2 }}>Login will be</div>
+              <div style={{ fontSize: 'var(--font-size-xs)', color: 'var(--text-primary)', fontWeight: 500 }}>
+                {newStaff.officialEmail || 'name@ministry.gov.eg'}
+              </div>
             </div>
           </div>
 
-          {/* ── Contact & account (this is what gets emailed) ── */}
-          <div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--spacing-xs)', marginBottom: 'var(--spacing-sm)', color: 'var(--text-muted)', fontSize: 'var(--font-size-xs)', textTransform: 'uppercase', fontWeight: 600 }}>
-              <KeyRound size={13} /> Account & Login
+          {/* ── Section 1: Identity ── */}
+          <div
+            style={{
+              padding: 'var(--spacing-lg)',
+              backgroundColor: 'var(--bg-card)',
+              border: '1px solid var(--border-primary)',
+              borderRadius: 'var(--radius-lg)',
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--spacing-sm)', marginBottom: 'var(--spacing-md)' }}>
+              <div
+                style={{
+                  width: '28px',
+                  height: '28px',
+                  borderRadius: 'var(--radius-md)',
+                  backgroundColor: 'var(--bg-secondary)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  color: 'var(--text-muted)',
+                  flexShrink: 0,
+                }}
+              >
+                <IdCard size={14} />
+              </div>
+              <div>
+                <div style={{ fontSize: 'var(--font-size-sm)', fontWeight: 600, color: 'var(--text-primary)' }}>Identity</div>
+                <div style={{ fontSize: 'var(--font-size-xs)', color: 'var(--text-muted)' }}>Who this record belongs to</div>
+              </div>
             </div>
+
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 'var(--spacing-md)' }}>
+              <div>
+                <label style={labelStyle}>Full Name</label>
+                <input
+                  type="text"
+                  value={newStaff.name}
+                  onChange={(e) => handleNameChange(e.target.value)}
+                  placeholder="e.g. Adam Youssef"
+                  style={inputStyle}
+                />
+              </div>
+              <div>
+                <label style={labelStyle}><IdCard size={14} /> National ID (الرقم القومي)</label>
+                <input
+                  type="text"
+                  value={newStaff.nationalId}
+                  onChange={(e) => setNewStaff((prev) => ({ ...prev, nationalId: e.target.value }))}
+                  placeholder="29001011234567"
+                  maxLength={14}
+                  style={inputStyle}
+                />
+              </div>
+              <div>
+                <label style={labelStyle}><Cake size={14} /> Date of Birth</label>
+                <input
+                  type="date"
+                  value={newStaff.dateOfBirth}
+                  onChange={(e) => setNewStaff((prev) => ({ ...prev, dateOfBirth: e.target.value }))}
+                  style={inputStyle}
+                />
+              </div>
+              <div>
+                <label style={labelStyle}>Phone Number</label>
+                <input
+                  type="tel"
+                  value={newStaff.phone}
+                  onChange={(e) => setNewStaff((prev) => ({ ...prev, phone: e.target.value }))}
+                  placeholder="+20 100 000 0000"
+                  style={inputStyle}
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* ── Section 2: Account & Login — the section that actually gets emailed, so it's visually called out ── */}
+          <div
+            style={{
+              padding: 'var(--spacing-lg)',
+              backgroundColor: 'var(--bg-card)',
+              border: '1px solid var(--accent-primary)',
+              borderRadius: 'var(--radius-lg)',
+              boxShadow: '0 0 0 1px color-mix(in srgb, var(--accent-primary) 15%, transparent)',
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--spacing-sm)', marginBottom: 'var(--spacing-md)' }}>
+              <div
+                style={{
+                  width: '28px',
+                  height: '28px',
+                  borderRadius: 'var(--radius-md)',
+                  backgroundColor: 'var(--accent-secondary)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  color: 'var(--accent-primary)',
+                  flexShrink: 0,
+                }}
+              >
+                <KeyRound size={14} />
+              </div>
+              <div>
+                <div style={{ fontSize: 'var(--font-size-sm)', fontWeight: 600, color: 'var(--text-primary)' }}>Account & Login</div>
+                <div style={{ fontSize: 'var(--font-size-xs)', color: 'var(--text-muted)' }}>Where the credentials get sent</div>
+              </div>
+            </div>
+
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 'var(--spacing-md)' }}>
               <div>
                 <label style={labelStyle}><Mail size={14} /> Personal Email</label>
@@ -781,16 +1066,43 @@ const Staff = () => {
               <Info size={14} style={{ flexShrink: 0, marginTop: 1 }} />
               <span>
                 هيتولّد باسورد آمن تلقائيًا وهيتبعت مع الإيميل الرسمي على البريد الشخصي المكتوب فوق بس —
-                مفيش حد بيشوفه في الشاشة، وهيتطلب من الموظف يغيّره أول ما يسجّل دخول.
+                مفيش حد بيشوفه في الشاشة، وهيتطلب من الموظف يغيّره أول ما يسجّل دخول. ولو ضاع منه، الأدمن يقدر يعمل
+                Reset Password في أي وقت من صفحة الموظف.
               </span>
             </div>
           </div>
 
-          {/* ── Employment details the Ministry keeps on file ── */}
-          <div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--spacing-xs)', marginBottom: 'var(--spacing-sm)', color: 'var(--text-muted)', fontSize: 'var(--font-size-xs)', textTransform: 'uppercase', fontWeight: 600 }}>
-              <Briefcase size={13} /> Employment Details
+          {/* ── Section 3: Employment details the Ministry keeps on file ── */}
+          <div
+            style={{
+              padding: 'var(--spacing-lg)',
+              backgroundColor: 'var(--bg-card)',
+              border: '1px solid var(--border-primary)',
+              borderRadius: 'var(--radius-lg)',
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--spacing-sm)', marginBottom: 'var(--spacing-md)' }}>
+              <div
+                style={{
+                  width: '28px',
+                  height: '28px',
+                  borderRadius: 'var(--radius-md)',
+                  backgroundColor: 'var(--bg-secondary)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  color: 'var(--text-muted)',
+                  flexShrink: 0,
+                }}
+              >
+                <Briefcase size={14} />
+              </div>
+              <div>
+                <div style={{ fontSize: 'var(--font-size-sm)', fontWeight: 600, color: 'var(--text-primary)' }}>Employment Details</div>
+                <div style={{ fontSize: 'var(--font-size-xs)', color: 'var(--text-muted)' }}>Role, placement, and HR record</div>
+              </div>
             </div>
+
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 'var(--spacing-md)' }}>
               <div>
                 <label style={labelStyle}>Role</label>
