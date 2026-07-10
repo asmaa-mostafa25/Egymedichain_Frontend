@@ -10,7 +10,7 @@ import {
   KeyRound,
 } from 'lucide-react';
 import { useAuthStore, useNotificationStore } from '../../store';
-import { authApi } from '../../api';
+import { authApi } from '../../api/services';
 import Button from '../../components/ui/Button';
 
 // ─── Password rules ─────────────────────────────────────────────────────────

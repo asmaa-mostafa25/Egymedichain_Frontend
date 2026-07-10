@@ -17,7 +17,7 @@ import {
   useNotificationStore,
 } from "../../store";
 
-import { reportsApi } from "../../api";
+import { reportsApi } from "../../api/services";
 import config from "../../config";
 
 function getInitials(name = "") {

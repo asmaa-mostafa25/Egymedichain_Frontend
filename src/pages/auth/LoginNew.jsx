@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { FaEye, FaEyeSlash } from "react-icons/fa";
 import { useLocation, useNavigate } from "react-router-dom";
-import { useAuthStore } from "../../store";
+import { useAuthStore } from "../../store/authStore";
 
 import "./login-new.css";
 
@@ -30,7 +30,8 @@ export default function LoginNew() {
   const navigate = useNavigate();
   const location = useLocation();
 
-  const from = location.state?.from?.pathname || "/dashboard";
+  // لو اليوزر اتحول لصفحة اللوجين من صفحة محمية، رجّعه لنفس الصفحة بعد الدخول
+  const from = location.state?.from?.pathname || null;
 
   const handleLogin = async (event) => {
     event.preventDefault();
@@ -46,8 +47,9 @@ export default function LoginNew() {
     const result = await login({ email: email.trim(), password: password.trim() });
 
     if (result.success) {
-      navigate(from, { replace: true });
+      navigate(from || result.homeRoute, { replace: true });
     }
+    // لو result.success === false، الرسالة بتظهر تلقائي من authStore عبر متغير error تحت
   };
 
   return (
@@ -77,6 +79,7 @@ export default function LoginNew() {
               onChange={(e) => {
                 setEmail(e.target.value);
                 setValidationError("");
+                clearError();
               }}
             />
           </div>
@@ -95,6 +98,7 @@ export default function LoginNew() {
               onChange={(e) => {
                 setPassword(e.target.value);
                 setValidationError("");
+                clearError();
               }}
             />
 

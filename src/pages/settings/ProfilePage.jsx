@@ -1,7 +1,7 @@
 import { useEffect, useState, useRef } from 'react';
 import { User, Upload, Save, Loader2 } from 'lucide-react';
 import { useUIStore, useNotificationStore, useAuthStore } from '../../store';
-import { settingsApi } from '../../api';
+import { settingsApi } from '../../api/services';
 import Button from '../../components/ui/Button';
 
 const ProfilePage = () => {

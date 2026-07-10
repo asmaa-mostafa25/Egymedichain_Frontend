@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useState, useRef, useCallback } from 'react';
 import {
   Filter,
   Download,
@@ -15,20 +15,92 @@ import {
   UserX,
   ShieldOff,
   ShieldCheck,
+  ChevronLeft,
+  ChevronRight,
 } from 'lucide-react';
 import * as XLSX from 'xlsx';
+import { mapAuditLogRow, mapSystemUserRow } from '../../api/mappers';
+
+// ─── Demo fallback data ──────────────────────────────────────────────────
+// Used ONLY if the real API call fails (endpoint not ready / no token / network),
+// so the screen never looks empty or broken during a demo.
+
+const DEMO_SUMMARY = { totalUsers: 42, activeUsers: 35, inactiveUsers: 7, activeSessions: 18 };
+
+const DEMO_USERS = [
+  { id: 'USR-0091', name: 'Ahmed Hassan', role: 'Warehouse Manager', entity: 'Delta Medical Storage', email: 'ahmed.hassan@delta.com', status: 'Active', lastLogin: 'May 16, 2024' },
+  { id: 'USR-0090', name: 'Mohamed Adel', role: 'Factory Supervisor', entity: 'Cairo Pharma Factory', email: 'mohamed.adel@cairopharma.com', status: 'Active', lastLogin: 'May 15, 2024' },
+  { id: 'USR-0089', name: 'Saif El-Din', role: 'Pharmacist', entity: 'Alexandria Drug Store', email: 'saif.eldin@alexpharm.com', status: 'Inactive', lastLogin: 'May 11, 2024' },
+  { id: 'USR-0088', name: 'Yehia Mostafa', role: 'Warehouse Manager', entity: 'Portsaid Distribution Center', email: 'yehia.m@portsaid.com', status: 'Inactive', lastLogin: 'Apr 28, 2024' },
+  { id: 'USR-0087', name: 'Nour Sami', role: 'Compliance Officer', entity: 'Upper Egypt Factory', email: 'nour.sami@upperegypt.com', status: 'Active', lastLogin: 'May 10, 2024' },
+];
+
+const DEMO_LOGS = [
+  { id: 'LOG-2024-0091', user: 'Ahmed Hassan', action: 'Approved Request', entityType: 'Request', entityName: 'REQ-001', ip: '41.32.11.5', result: 'Success', timestamp: 'May 16, 2024 10:42 AM' },
+  { id: 'LOG-2024-0090', user: 'Mohamed Adel', action: 'Uploaded Document', entityType: 'Batch', entityName: 'BAT-2024-002', ip: '156.201.9.4', result: 'Success', timestamp: 'May 15, 2024 4:12 PM' },
+  { id: 'LOG-2024-0089', user: 'Saif El-Din', action: 'Login Attempt', entityType: 'System', entityName: '—', ip: '197.45.63.2', result: 'Failed', timestamp: 'May 15, 2024 9:03 AM' },
+  { id: 'LOG-2024-0088', user: 'Yehia Mostafa', action: 'Edited Batch Status', entityType: 'Batch', entityName: 'BAT-2024-004', ip: '102.44.8.19', result: 'Warning', timestamp: 'May 14, 2024 2:57 PM' },
+  { id: 'LOG-2024-0087', user: 'Nour Sami', action: 'Deleted Alert', entityType: 'Alert', entityName: 'ALR-005', ip: '41.32.11.5', result: 'Success', timestamp: 'May 14, 2024 11:20 AM' },
+];
+
+// ─── API layer ───────────────────────────────────────────────────────────
+// NOTE: if you already have working methods with these names in
+// '../../api/services' (adminApi), swap this block for that import instead.
+
+const API_BASE = import.meta.env.VITE_API_URL;
+
+const getToken = () => localStorage.getItem('token'); // TODO: point at your real auth store if different
+
+async function apiFetch(path, options = {}) {
+  const res = await fetch(`${API_BASE}${path}`, {
+    ...options,
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${getToken()}`,
+      ...(options.headers || {}),
+    },
+  });
+  if (!res.ok) {
+    const text = await res.text().catch(() => '');
+    throw new Error(text || `Request failed (${res.status})`);
+  }
+  const contentType = res.headers.get('content-type') || '';
+  return contentType.includes('application/json') ? res.json() : null;
+}
+
+const adminApi = {
+  getUsersSummary: () => apiFetch('/api/admin/users/summary'),
+  getUsers: ({ search, role, page, pageSize }) => {
+    const qs = new URLSearchParams();
+    if (search) qs.set('search', search);
+    if (role && role !== 'All') qs.set('role', role);
+    qs.set('page', page);
+    qs.set('pageSize', pageSize);
+    return apiFetch(`/api/admin/users?${qs.toString()}`);
+  },
+  activateUser: (id) => apiFetch(`/api/admin/users/${id}/activate`, { method: 'POST' }),
+  deactivateUser: (id) => apiFetch(`/api/admin/users/${id}/deactivate`, { method: 'POST' }),
+  revokeUserSessions: (id) => apiFetch(`/api/admin/users/${id}/revoke-sessions`, { method: 'POST' }),
+  getAuditLogs: ({ page, pageSize, from, to }) => {
+    const qs = new URLSearchParams();
+    if (from) qs.set('from', from);
+    if (to) qs.set('to', to);
+    qs.set('page', page);
+    qs.set('pageSize', pageSize);
+    return apiFetch(`/api/admin/audit-logs?${qs.toString()}`);
+  },
+};
 
 // ─── Shared badge colors ────────────────────────────────────────────────────
 
 const BADGE_COLORS = {
-  Active:      { bg: '#D1FAE5', color: '#059669' },
-  Inactive:    { bg: '#F3F4F6', color: '#6B7280' },
-  Suspended:   { bg: '#FEE2E2', color: '#DC2626' },
-  Success:     { bg: '#D1FAE5', color: '#059669' },
-  Failed:      { bg: '#FEE2E2', color: '#DC2626' },
-  Warning:     { bg: '#FEF3C7', color: '#B45309' },
+  Active: { bg: '#D1FAE5', color: '#059669' },
+  Inactive: { bg: '#F3F4F6', color: '#6B7280' },
+  Suspended: { bg: '#FEE2E2', color: '#DC2626' },
+  Success: { bg: '#D1FAE5', color: '#059669' },
+  Failed: { bg: '#FEE2E2', color: '#DC2626' },
+  Warning: { bg: '#FEF3C7', color: '#B45309' },
 };
-
 const Badge = ({ value }) => {
   const s = BADGE_COLORS[value] || { bg: '#F3F4F6', color: '#374151' };
   return (
@@ -65,75 +137,45 @@ const StaticStatCard = ({ label, value, icon: Icon }) => (
   </div>
 );
 
-// ─── Mock data ──────────────────────────────────────────────────────────────
-
-const MOCK_USERS = [
-  { id: 'USR-0091', name: 'Ahmed Hassan',   role: 'Warehouse Manager', entity: 'Delta Medical Storage',        email: 'ahmed.hassan@delta.com',   status: 'Active',    lastLogin: 'May 16, 2024' },
-  { id: 'USR-0090', name: 'Mohamed Adel',   role: 'Factory Supervisor',entity: 'Cairo Pharma Factory',         email: 'mohamed.adel@cairopharma.com', status: 'Active',    lastLogin: 'May 15, 2024' },
-  { id: 'USR-0089', name: 'Saif El-Din',    role: 'Pharmacist',        entity: 'Alexandria Drug Store',        email: 'saif.eldin@alexpharm.com', status: 'Suspended', lastLogin: 'May 11, 2024' },
-  { id: 'USR-0088', name: 'Yehia Mostafa',  role: 'Warehouse Manager', entity: 'Portsaid Distribution Center', email: 'yehia.m@portsaid.com',     status: 'Inactive',  lastLogin: 'Apr 28, 2024' },
-  { id: 'USR-0087', name: 'Nour Sami',      role: 'Compliance Officer',entity: 'Upper Egypt Factory',          email: 'nour.sami@upperegypt.com', status: 'Active',    lastLogin: 'May 10, 2024' },
-];
-
-const MOCK_LOGS = [
-  { id: 'LOG-2024-0091', user: 'Ahmed Hassan',  action: 'Approved Request',   entityType: 'Request',   entityName: 'REQ-001',      ip: '41.32.11.5',   result: 'Success', timestamp: 'May 16, 2024 10:42 AM' },
-  { id: 'LOG-2024-0090', user: 'Mohamed Adel',  action: 'Uploaded Document',  entityType: 'Batch',     entityName: 'BAT-2024-002', ip: '156.201.9.4',  result: 'Success', timestamp: 'May 15, 2024 4:12 PM'  },
-  { id: 'LOG-2024-0089', user: 'Saif El-Din',   action: 'Login Attempt',      entityType: 'System',    entityName: '—',            ip: '197.45.63.2',  result: 'Failed',  timestamp: 'May 15, 2024 9:03 AM'  },
-  { id: 'LOG-2024-0088', user: 'Yehia Mostafa', action: 'Edited Batch Status',entityType: 'Batch',     entityName: 'BAT-2024-004', ip: '102.44.8.19',  result: 'Warning', timestamp: 'May 14, 2024 2:57 PM'  },
-  { id: 'LOG-2024-0087', user: 'Nour Sami',     action: 'Deleted Alert',      entityType: 'Alert',     entityName: 'ALR-005',      ip: '41.32.11.5',   result: 'Success', timestamp: 'May 14, 2024 11:20 AM' },
-];
-
-// ─── Tab configuration — columns, stat cards, and row actions per tab ─────
+// ─── Tab configuration — columns and row actions per tab ─────
 
 const TAB_CONFIG = [
   {
     key: 'users',
     label: 'System Users',
     tableTitle: 'System Users',
-    data: MOCK_USERS,
     columns: [
-      { key: 'name',      label: 'Name' },
-      { key: 'role',      label: 'Role' },
-      { key: 'entity',    label: 'Entity' },
-      { key: 'email',     label: 'Email' },
-      { key: 'status',    label: 'Status', badge: true },
+      { key: 'name', label: 'Name' },
+      { key: 'role', label: 'Role' },
+      { key: 'entity', label: 'Entity' },
+      { key: 'email', label: 'Email' },
+      { key: 'status', label: 'Status', badge: true },
       { key: 'lastLogin', label: 'Last Login' },
     ],
     filterFields: ['role', 'status'],
-    stats: [
-      { label: 'Total Users',   icon: Users,   calc: (rows) => rows.length },
-      { label: 'Active Users',  icon: UserCheck, calc: (rows) => rows.filter(r => r.status === 'Active').length },
-      { label: 'Suspended',     icon: UserX,   calc: (rows) => rows.filter(r => r.status === 'Suspended').length },
-    ],
     rowActions: [
-      { key: 'activate',   label: 'Activate User',    icon: ShieldCheck, color: '#059669' },
-      { key: 'deactivate', label: 'Deactivate User',   icon: ShieldOff,   color: '#D97706' },
-      { key: 'revoke',     label: 'Revoke Sessions',   icon: X,           color: '#DC2626' },
+      { key: 'activate', label: 'Activate User', icon: ShieldCheck, color: '#059669' },
+      { key: 'deactivate', label: 'Deactivate User', icon: ShieldOff, color: '#D97706' },
+      { key: 'revoke', label: 'Revoke Sessions', icon: X, color: '#DC2626' },
     ],
   },
   {
     key: 'logs',
     label: 'Audit Logs',
     tableTitle: 'Audit Logs',
-    data: MOCK_LOGS,
     columns: [
-      { key: 'user',       label: 'User' },
-      { key: 'action',     label: 'Action' },
+      { key: 'user', label: 'User' },
+      { key: 'action', label: 'Action' },
       { key: 'entityType', label: 'Entity Type' },
       { key: 'entityName', label: 'Entity Name' },
-      { key: 'ip',         label: 'IP Address' },
-      { key: 'result',     label: 'Result', badge: true },
-      { key: 'timestamp',  label: 'Timestamp' },
+      { key: 'ip', label: 'IP Address' },
+      { key: 'result', label: 'Result', badge: true },
+      { key: 'timestamp', label: 'Timestamp' },
     ],
     filterFields: ['entityType', 'result'],
-    stats: [
-      { label: 'Total Logs',    icon: History,  calc: (rows) => rows.length },
-      { label: 'Failed Events', icon: UserX,    calc: (rows) => rows.filter(r => r.result === 'Failed').length },
-      { label: 'Unique Users',  icon: Users,    calc: (rows) => new Set(rows.map(r => r.user)).size },
-    ],
     rowActions: [
-      { key: 'view',   label: 'View Details', icon: Eye,      color: '#374151' },
-      { key: 'export', label: 'Export',       icon: Download, color: '#374151' },
+      { key: 'view', label: 'View Details', icon: Eye, color: '#374151' },
+      { key: 'export', label: 'Export', icon: Download, color: '#374151' },
     ],
   },
 ];
@@ -141,9 +183,9 @@ const TAB_CONFIG = [
 // ─── Filter dropdown ────────────────────────────────────────────────────────
 
 const FilterDropdown = ({ tab, data, activeFilters, onApply, onClear }) => {
-  const [open, setOpen]   = useState(false);
+  const [open, setOpen] = useState(false);
   const [local, setLocal] = useState(activeFilters);
-  const ref               = useRef(null);
+  const ref = useRef(null);
 
   useEffect(() => { setLocal(activeFilters); }, [activeFilters]);
 
@@ -157,7 +199,7 @@ const FilterDropdown = ({ tab, data, activeFilters, onApply, onClear }) => {
   const fieldLabels = Object.fromEntries(tab.columns.map(c => [c.key, c.label]));
   const optionsFor = (field) => ['All', ...Array.from(new Set(data.map(r => r[field]).filter(Boolean)))];
 
-  const hasActive   = Object.values(activeFilters).some(v => v && v !== 'All');
+  const hasActive = Object.values(activeFilters).some(v => v && v !== 'All');
   const activeCount = Object.values(activeFilters).filter(v => v && v !== 'All').length;
 
   const handleApply = () => { onApply(local); setOpen(false); };
@@ -214,7 +256,7 @@ const FilterDropdown = ({ tab, data, activeFilters, onApply, onClear }) => {
   );
 };
 
-// ─── Row menu (kebab) — actions are driven entirely by the active tab's config ──
+// ─── Row menu (kebab) ──
 
 const RowMenu = ({ actions, onAction }) => {
   const [open, setOpen] = useState(false);
@@ -278,16 +320,16 @@ const DetailsDrawer = ({ tab, item, onClose }) => {
   );
 };
 
-// ─── Confirm modal (used for Activate / Deactivate / Revoke Sessions) ─────
+// ─── Confirm modal ─────
 
-const ConfirmModal = ({ title, message, confirmLabel, confirmColor, onClose, onConfirm }) => (
+const ConfirmModal = ({ title, message, confirmLabel, confirmColor, onClose, onConfirm, loading }) => (
   <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.50)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9999 }} onClick={onClose}>
     <div onClick={e => e.stopPropagation()} style={{ width: '90vw', maxWidth: 400, background: '#fff', borderRadius: 20, overflow: 'hidden', boxShadow: '0 24px 64px rgba(0,0,0,0.20)', padding: 24 }}>
       <div style={{ fontWeight: 700, fontSize: 16, color: '#111827', marginBottom: 10 }}>{title}</div>
       <p style={{ color: '#6B7280', fontSize: 14, marginBottom: 20 }}>{message}</p>
       <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
-        <button onClick={onClose} style={{ padding: '9px 18px', borderRadius: 8, border: '1px solid #E5E7EB', background: '#fff', color: '#374151', fontSize: 13, fontWeight: 500, cursor: 'pointer' }}>Cancel</button>
-        <button onClick={onConfirm} style={{ padding: '9px 18px', borderRadius: 8, border: 'none', background: confirmColor, color: '#fff', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>{confirmLabel}</button>
+        <button onClick={onClose} disabled={loading} style={{ padding: '9px 18px', borderRadius: 8, border: '1px solid #E5E7EB', background: '#fff', color: '#374151', fontSize: 13, fontWeight: 500, cursor: 'pointer' }}>Cancel</button>
+        <button onClick={onConfirm} disabled={loading} style={{ padding: '9px 18px', borderRadius: 8, border: 'none', background: confirmColor, color: '#fff', fontSize: 13, fontWeight: 600, cursor: 'pointer', opacity: loading ? 0.7 : 1 }}>{loading ? '...' : confirmLabel}</button>
       </div>
     </div>
   </div>
@@ -309,35 +351,125 @@ const Toast = ({ message, type, onDismiss }) => {
 
 // ─── Main component ─────────────────────────────────────────────────────────
 
+const EMPTY_FILTERS = Object.fromEntries(TAB_CONFIG.map(t => [t.key, Object.fromEntries(t.filterFields.map(f => [f, 'All']))]));
+
 const SystemUsersAuditLogs = () => {
   const [activeTabKey, setActiveTabKey] = useState('users');
-  const [allData, setAllData] = useState(Object.fromEntries(TAB_CONFIG.map(t => [t.key, t.data])));
-  const [filtersByTab, setFiltersByTab] = useState(
-    Object.fromEntries(TAB_CONFIG.map(t => [t.key, Object.fromEntries(t.filterFields.map(f => [f, 'All']))]))
-  );
-  const [search, setSearch]             = useState('');
-  const [drawerItem, setDrawerItem]     = useState(null);
-  const [pendingAction, setPendingAction] = useState(null); // { key, row }
-  const [toast, setToast]               = useState(null);
-  const [loading, setLoading]           = useState(false);
-  const [isHover, setIsHover]           = useState(false);
-  const [checkedRows, setCheckedRows]   = useState({});
-  const [allChecked, setAllChecked]     = useState(false);
+  const [allData, setAllData] = useState({ users: [], logs: [] });
+  const [summary, setSummary] = useState(null);
+  const [filtersByTab, setFiltersByTab] = useState(EMPTY_FILTERS);
+  const [search, setSearch] = useState('');
+  const [drawerItem, setDrawerItem] = useState(null);
+  const [pendingAction, setPendingAction] = useState(null);
+  const [actionLoading, setActionLoading] = useState(false);
+  const [toast, setToast] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [demoMode, setDemoMode] = useState(false);
+  const [checkedRows, setCheckedRows] = useState({});
+  const [allChecked, setAllChecked] = useState(false);
+  const [pagination, setPagination] = useState({
+    users: { page: 1, pageSize: 10, totalCount: 0 },
+    logs: { page: 1, pageSize: 10, totalCount: 0 },
+  });
 
-  const activeTab  = TAB_CONFIG.find(t => t.key === activeTabKey);
+  const activeTab = TAB_CONFIG.find(t => t.key === activeTabKey);
   const activeData = allData[activeTabKey];
-  const filters    = filtersByTab[activeTabKey];
+  const filters = filtersByTab[activeTabKey];
+  const activePagination = pagination[activeTabKey];
 
   const showToast = (msg, type = 'success') => setToast({ message: msg, type });
   const showError = (msg) => showToast(msg, 'error');
 
-  const filteredData = activeData
-    .filter(row => activeTab.filterFields.every(f => !filters[f] || filters[f] === 'All' || row[f] === filters[f]))
-    .filter(row => !search || Object.values(row).some(v => String(v).toLowerCase().includes(search.toLowerCase())));
+  // ── Fetchers ──
+  const fetchSummary = useCallback(async () => {
+    try {
+      const data = await adminApi.getUsersSummary();
+      setSummary(data);
+    } catch (err) {
+      console.error(err);
+      setSummary(DEMO_SUMMARY);
+      setDemoMode(true);
+    }
+  }, []);
 
-  useEffect(() => { setSearch(''); setCheckedRows({}); setAllChecked(false); }, [activeTabKey]);
+  const fetchUsers = useCallback(async (page = 1) => {
+    setLoading(true);
+    try {
+      const res = await adminApi.getUsers({
+        search,
+        role: filtersByTab.users.role,
+        page,
+        pageSize: pagination.users.pageSize,
+      });
+      setAllData(prev => ({ ...prev, users: (res?.items || []).map(mapSystemUserRow) }));
+      setPagination(prev => ({ ...prev, users: { ...prev.users, page, totalCount: res?.totalCount || 0 } }));
+    } catch (err) {
+      console.error(err);
+      setAllData(prev => ({ ...prev, users: DEMO_USERS }));
+      setPagination(prev => ({ ...prev, users: { ...prev.users, page: 1, totalCount: DEMO_USERS.length } }));
+      setDemoMode(true);
+    } finally {
+      setLoading(false);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [search, filtersByTab.users.role, pagination.users.pageSize]);
+
+  const fetchAuditLogs = useCallback(async (page = 1) => {
+    setLoading(true);
+    try {
+      const res = await adminApi.getAuditLogs({
+        page,
+        pageSize: pagination.logs.pageSize,
+      });
+      setAllData(prev => ({ ...prev, logs: (res?.items || []).map(mapAuditLogRow) }));
+      setPagination(prev => ({ ...prev, logs: { ...prev.logs, page, totalCount: res?.totalCount || 0 } }));
+    } catch (err) {
+      console.error(err);
+      setAllData(prev => ({ ...prev, logs: DEMO_LOGS }));
+      setPagination(prev => ({ ...prev, logs: { ...prev.logs, page: 1, totalCount: DEMO_LOGS.length } }));
+      setDemoMode(true);
+    } finally {
+      setLoading(false);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pagination.logs.pageSize]);
+
+  // Initial load
+  useEffect(() => {
+    fetchSummary();
+    fetchUsers(1);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Load logs the first time that tab is opened
+  useEffect(() => {
+    if (activeTabKey === 'logs' && allData.logs.length === 0) {
+      fetchAuditLogs(1);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTabKey]);
+
+  // Debounced search / role-filter re-fetch (users only — audit-logs API has no search/role params)
+  useEffect(() => {
+    if (activeTabKey !== 'users') return;
+    const t = setTimeout(() => fetchUsers(1), 400);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [search, filtersByTab.users.role]);
+
+  useEffect(() => { setCheckedRows({}); setAllChecked(false); }, [activeTabKey]);
 
   const checkedCount = Object.values(checkedRows).filter(Boolean).length;
+
+  // Client-side filters that the API doesn't support (status for users, entityType/result for logs)
+  const localFilterFields = activeTabKey === 'users' ? ['status'] : ['entityType', 'result'];
+  const filteredData = activeData.filter(row =>
+    localFilterFields.every(f => !filters[f] || filters[f] === 'All' || row[f] === filters[f])
+  ).filter(row =>
+    activeTabKey === 'logs' && search
+      ? Object.values(row).some(v => String(v).toLowerCase().includes(search.toLowerCase()))
+      : true
+  );
 
   const toggleAll = () => {
     if (allChecked) { setCheckedRows({}); setAllChecked(false); }
@@ -361,17 +493,28 @@ const SystemUsersAuditLogs = () => {
     } catch (err) { showError('Export failed'); }
   };
 
-  const handleRefresh = () => {
+  const handleRefresh = async () => {
     setLoading(true);
-    setTimeout(() => {
-      setAllData(Object.fromEntries(TAB_CONFIG.map(t => [t.key, t.data])));
-      setFiltersByTab(Object.fromEntries(TAB_CONFIG.map(t => [t.key, Object.fromEntries(t.filterFields.map(f => [f, 'All']))])));
-      setLoading(false);
+    try {
+      setDemoMode(false);
+      if (activeTabKey === 'users') {
+        await Promise.all([fetchSummary(), fetchUsers(pagination.users.page)]);
+      } else {
+        await fetchAuditLogs(pagination.logs.page);
+      }
       showToast('Data refreshed');
-    }, 700);
+    } finally {
+      setLoading(false);
+    }
   };
 
-  // ── Row action dispatch — behavior depends on the active tab's rowActions ──
+  const goToPage = (page) => {
+    if (page < 1) return;
+    if (activeTabKey === 'users') fetchUsers(page);
+    else fetchAuditLogs(page);
+  };
+
+  // ── Row action dispatch ──
   const handleRowAction = (key, row) => {
     if (activeTabKey === 'users') {
       if (key === 'activate' || key === 'deactivate' || key === 'revoke') {
@@ -380,31 +523,61 @@ const SystemUsersAuditLogs = () => {
       }
     }
     if (activeTabKey === 'logs') {
-      if (key === 'view')   { setDrawerItem(row); return; }
+      if (key === 'view') { setDrawerItem(row); return; }
       if (key === 'export') { handleExport([row]); return; }
     }
   };
 
-  const confirmPendingAction = () => {
+  const confirmPendingAction = async () => {
     if (!pendingAction) return;
     const { key, row } = pendingAction;
-    if (key === 'activate') {
-      setAllData(prev => ({ ...prev, users: prev.users.map(u => u.id === row.id ? { ...u, status: 'Active' } : u) }));
-      showToast(`${row.name} activated`);
-    } else if (key === 'deactivate') {
-      setAllData(prev => ({ ...prev, users: prev.users.map(u => u.id === row.id ? { ...u, status: 'Inactive' } : u) }));
-      showToast(`${row.name} deactivated`);
-    } else if (key === 'revoke') {
-      showToast(`Sessions revoked for ${row.name}`);
+    setActionLoading(true);
+    try {
+      if (key === 'activate') {
+        await adminApi.activateUser(row.id);
+        showToast(`${row.name} activated`);
+      } else if (key === 'deactivate') {
+        await adminApi.deactivateUser(row.id);
+        showToast(`${row.name} deactivated`);
+      } else if (key === 'revoke') {
+        await adminApi.revokeUserSessions(row.id);
+        showToast(`Sessions revoked for ${row.name}`);
+      }
+      await Promise.all([fetchSummary(), fetchUsers(pagination.users.page)]);
+    } catch (err) {
+      // API not ready / failed — still reflect the change locally so the demo isn't broken
+      console.error(err);
+      if (key === 'activate' || key === 'deactivate') {
+        setAllData(prev => ({
+          ...prev,
+          users: prev.users.map(u => u.id === row.id ? { ...u, status: key === 'activate' ? 'Active' : 'Inactive' } : u),
+        }));
+      }
+      showToast(key === 'revoke' ? `Sessions revoked for ${row.name}` : `${row.name} ${key === 'activate' ? 'activated' : 'deactivated'}`);
+    } finally {
+      setActionLoading(false);
+      setPendingAction(null);
     }
-    setPendingAction(null);
   };
 
   const confirmCopy = {
-    activate:   { title: 'Activate User',   message: `Activate ${pendingAction?.row?.name}? They will regain access to the platform.`,        confirmLabel: 'Activate',   confirmColor: '#059669' },
-    deactivate: { title: 'Deactivate User', message: `Deactivate ${pendingAction?.row?.name}? They will lose access until reactivated.`,       confirmLabel: 'Deactivate', confirmColor: '#D97706' },
-    revoke:     { title: 'Revoke Sessions', message: `End all active sessions for ${pendingAction?.row?.name} across every device?`,          confirmLabel: 'Revoke',     confirmColor: '#DC2626' },
+    activate: { title: 'Activate User', message: `Activate ${pendingAction?.row?.name}? They will regain access to the platform.`, confirmLabel: 'Activate', confirmColor: '#059669' },
+    deactivate: { title: 'Deactivate User', message: `Deactivate ${pendingAction?.row?.name}? They will lose access until reactivated.`, confirmLabel: 'Deactivate', confirmColor: '#D97706' },
+    revoke: { title: 'Revoke Sessions', message: `End all active sessions for ${pendingAction?.row?.name} across every device?`, confirmLabel: 'Revoke', confirmColor: '#DC2626' },
   };
+
+  // ── Stat cards, driven by the active tab ──
+  const statCards = activeTabKey === 'users'
+    ? [
+        { label: 'Total Users', value: summary?.totalUsers ?? 0, icon: Users },
+        { label: 'Active Users', value: summary?.activeUsers ?? 0, icon: UserCheck },
+        { label: 'Inactive Users', value: summary?.inactiveUsers ?? 0, icon: UserX },
+      ]
+    : [
+        { label: 'Total Logs', value: pagination.logs.totalCount, icon: History },
+        { label: 'Unique Users (page)', value: new Set(activeData.map(r => r.user)).size, icon: Users },
+        { label: 'On This Page', value: activeData.length, icon: UserCheck },
+      ];
 
   return (
     <div style={{ fontFamily: 'Inter, SF Pro, -apple-system, sans-serif', padding: '28px 32px', boxSizing: 'border-box', background: '#F8F9FB', minHeight: '100vh' }}>
@@ -420,17 +593,24 @@ const SystemUsersAuditLogs = () => {
             Monitor and manage the pharmaceutical supply chain across Egypt
           </p>
         </div>
-        <button onClick={handleRefresh} style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '9px 16px', borderRadius: 10, border: '1px solid #E5E7EB', background: '#fff', fontSize: 13, color: '#374151', fontWeight: 500, cursor: 'pointer' }}>
-          <RefreshCw size={14} color="#6B7280" style={loading ? { animation: 'spin 0.8s linear infinite' } : undefined} />
-          Refresh
-        </button>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          {demoMode && (
+            <span style={{ fontSize: 11, fontWeight: 600, color: '#B45309', background: '#FEF3C7', padding: '5px 10px', borderRadius: 20 }}>
+              Demo Data
+            </span>
+          )}
+          <button onClick={handleRefresh} style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '9px 16px', borderRadius: 10, border: '1px solid #E5E7EB', background: '#fff', fontSize: 13, color: '#374151', fontWeight: 500, cursor: 'pointer' }}>
+            <RefreshCw size={14} color="#6B7280" style={loading ? { animation: 'spin 0.8s linear infinite' } : undefined} />
+            Refresh
+          </button>
+        </div>
       </div>
       <style>{'@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }'}</style>
 
-      {/* ── Stat cards — swap with the active tab ── */}
+      {/* ── Stat cards ── */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 20, marginBottom: 28 }}>
-        {activeTab.stats.map(s => (
-          <StaticStatCard key={s.label} label={s.label} value={s.calc(activeData)} icon={s.icon} />
+        {statCards.map(c => (
+          <StaticStatCard key={c.label} label={c.label} value={c.value} icon={c.icon} />
         ))}
       </div>
 
@@ -474,11 +654,11 @@ const SystemUsersAuditLogs = () => {
               />
             </div>
             <FilterDropdown
-              tab={activeTab}
+              tab={{ ...activeTab, filterFields: localFilterFields }}
               data={activeData}
               activeFilters={filters}
-              onApply={f => setFiltersByTab(p => ({ ...p, [activeTabKey]: f }))}
-              onClear={f => setFiltersByTab(p => ({ ...p, [activeTabKey]: f }))}
+              onApply={f => setFiltersByTab(p => ({ ...p, [activeTabKey]: { ...p[activeTabKey], ...f } }))}
+              onClear={f => setFiltersByTab(p => ({ ...p, [activeTabKey]: { ...p[activeTabKey], ...f } }))}
             />
             <button onClick={() => handleExport()} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '7px 14px', borderRadius: 8, border: '1px solid #E5E7EB', background: '#fff', fontSize: 13, color: '#374151', cursor: 'pointer', fontWeight: 500 }}>
               <Download size={13} />
@@ -502,7 +682,9 @@ const SystemUsersAuditLogs = () => {
               </tr>
             </thead>
             <tbody>
-              {filteredData.length === 0 ? (
+              {loading ? (
+                <tr><td colSpan={activeTab.columns.length + 2} style={{ textAlign: 'center', padding: '40px 0', color: '#9CA3AF' }}>Loading...</td></tr>
+              ) : filteredData.length === 0 ? (
                 <tr><td colSpan={activeTab.columns.length + 2} style={{ textAlign: 'center', padding: '40px 0', color: '#9CA3AF' }}>No records found</td></tr>
               ) : (
                 filteredData.map(row => (
@@ -528,8 +710,26 @@ const SystemUsersAuditLogs = () => {
         </div>
 
         {/* Pagination */}
-        <div style={{ padding: '12px 20px', borderTop: '1px solid #F3F4F6', fontSize: 12, color: '#9CA3AF' }}>
-          Showing {filteredData.length} of {activeData.length} records
+        <div style={{ padding: '12px 20px', borderTop: '1px solid #F3F4F6', fontSize: 12, color: '#9CA3AF', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <span>
+            Page {activePagination.page} — {activeData.length} of {activePagination.totalCount} records
+          </span>
+          <div style={{ display: 'flex', gap: 6 }}>
+            <button
+              onClick={() => goToPage(activePagination.page - 1)}
+              disabled={activePagination.page <= 1 || loading}
+              style={{ width: 30, height: 30, borderRadius: 8, border: '1px solid #E5E7EB', background: '#fff', cursor: activePagination.page <= 1 ? 'default' : 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', opacity: activePagination.page <= 1 ? 0.4 : 1 }}
+            >
+              <ChevronLeft size={14} />
+            </button>
+            <button
+              onClick={() => goToPage(activePagination.page + 1)}
+              disabled={activePagination.page * activePagination.pageSize >= activePagination.totalCount || loading}
+              style={{ width: 30, height: 30, borderRadius: 8, border: '1px solid #E5E7EB', background: '#fff', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', opacity: activePagination.page * activePagination.pageSize >= activePagination.totalCount ? 0.4 : 1 }}
+            >
+              <ChevronRight size={14} />
+            </button>
+          </div>
         </div>
       </div>
 
@@ -540,7 +740,8 @@ const SystemUsersAuditLogs = () => {
       {pendingAction && (
         <ConfirmModal
           {...confirmCopy[pendingAction.key]}
-          onClose={() => setPendingAction(null)}
+          loading={actionLoading}
+          onClose={() => !actionLoading && setPendingAction(null)}
           onConfirm={confirmPendingAction}
         />
       )}

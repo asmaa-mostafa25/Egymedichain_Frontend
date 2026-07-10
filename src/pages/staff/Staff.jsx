@@ -19,7 +19,7 @@ import {
   RotateCcw,
 } from 'lucide-react';
 import { useUIStore, useNotificationStore } from '../../store';
-import { staffApi } from '../../api';
+import { staffApi } from '../../api/services';
 import DataTable from '../../components/ui/DataTable';
 import StatusBadge from '../../components/ui/StatusBadge';
 import Button from '../../components/ui/Button';

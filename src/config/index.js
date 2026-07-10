@@ -19,22 +19,23 @@ const config = {
   APP_DESCRIPTION: 'National Ministry of Health Pharmaceutical Supply Chain Control System',
   
   // Roles
-  ROLES: {
-    MOH_ADMIN: 'MOH_ADMIN',
-    SUPER_ADMIN: 'SUPER_ADMIN',
-    INSPECTOR: 'INSPECTOR',
-    ANALYST: 'ANALYST',
-    AUDITOR: 'AUDITOR',
-  },
+  // أضفها أو استبدل قسم ROLES في config.js
+ROLES: {
+  SUPER_ADMIN: 'SuperAdmin',
+  MINISTRY_ADMIN: 'MinistryAdmin',
+  FACTORY_USER: 'FactoryUser',
+  WAREHOUSE_USER: 'WarehouseUser',
+  PHARMACY_USER: 'PharmacyUser',
+},
   
   // Role Labels
-  ROLE_LABELS: {
-    MOH_ADMIN: 'Ministry Administrator',
-    SUPER_ADMIN: 'Super Administrator',
-    INSPECTOR: 'Field Inspector',
-    ANALYST: 'Data Analyst',
-    AUDITOR: 'System Auditor',
-  },
+ ROLE_LABELS: {
+  SUPER_ADMIN: 'Super Administrator',
+  MINISTRY_ADMIN: 'Ministry Administrator',
+  FACTORY_USER: 'Factory User',
+  WAREHOUSE_USER: 'Warehouse User',
+  PHARMACY_USER: 'Pharmacy User',
+},
   
   // Status Codes
   STATUS: {

@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Bell, Shield, Palette, Save } from 'lucide-react';
 import { useUIStore, useNotificationStore } from '../../store';
-import { settingsApi } from '../../api';
+import { settingsApi } from '../../api/services';
 import Button from '../../components/ui/Button';
 
 const SettingsPage = () => {

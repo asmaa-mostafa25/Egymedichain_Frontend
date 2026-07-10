@@ -48,15 +48,28 @@ const Unauthorized = () => {
         >
           You do not have permission to access this resource. Please contact your administrator if you believe this is an error.
         </p>
-        <div style={{ display: 'flex', gap: 'var(--spacing-md)', justifyContent: 'center' }}>
-          <Link to="/" style={{ textDecoration: 'none' }}>
-            <Button variant="primary" leftIcon={Home}>
-              Go to Dashboard
-            </Button>
-          </Link>
-          <Button variant="secondary" leftIcon={ArrowLeft} onClick={() => window.history.back()}>
-            Go Back
-          </Button>
+        <div style={{ display: 'flex', gap: '16px', justifyContent: 'center' }}>
+  <Link to="/login">
+    <button
+      style={{
+        padding: '10px 20px',
+        cursor: 'pointer',
+      }}
+    >
+      Go to Login
+    </button>
+  </Link>
+
+  <button
+    style={{
+      padding: '10px 20px',
+      cursor: 'pointer',
+    }}
+    onClick={() => window.history.back()}
+  >
+    Go Back
+  </button>
+
         </div>
       </div>
     </div>
