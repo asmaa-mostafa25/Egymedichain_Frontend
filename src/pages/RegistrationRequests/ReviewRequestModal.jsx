@@ -1,6 +1,6 @@
 // src/pages/RegistrationRequests/ReviewRequestModal.jsx
 import { useState, useEffect } from 'react';
-import { X, Check, XCircle, FileWarning, Download, FileText } from 'lucide-react';
+import { X, Check, XCircle, FileWarning, Download, FileText, Loader2 } from 'lucide-react';
 
 // ─── Props (كما تُستخدم في WarehouseDashboard) ─────────────────────────────
 // open: boolean
@@ -28,12 +28,14 @@ const ReviewRequestModal = ({
   const [mode, setMode] = useState(null); // null | 'reject' | 'inspection'
   const [reasonText, setReasonText] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const [downloadingId, setDownloadingId] = useState(null);
 
   // إعادة الضبط كل ما يتغير العنصر أو تتقفل النافذة
   useEffect(() => {
     setMode(null);
     setReasonText('');
     setSubmitting(false);
+    setDownloadingId(null);
   }, [item, open]);
 
   if (!open || !item) return null;
@@ -70,6 +72,33 @@ const ReviewRequestModal = ({
       await onAction('inspection', item, { adminNotes: reasonText.trim() });
     } finally {
       setSubmitting(false);
+    }
+  };
+
+  // ─── تحميل المستند فعليًا بدل فتحه في تاب جديد فقط ─────────────────────
+  const handleDownload = async (doc) => {
+    if (!doc.url || downloadingId) return;
+    setDownloadingId(doc.id);
+    try {
+      const res = await fetch(doc.url);
+      if (!res.ok) throw new Error('فشل تحميل الملف');
+      const blob = await res.blob();
+      const blobUrl = window.URL.createObjectURL(blob);
+
+      const link = document.createElement('a');
+      link.href = blobUrl;
+      link.download = doc.name || 'document';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+
+      window.URL.revokeObjectURL(blobUrl);
+    } catch (err) {
+      // fallback: لو فشل التحميل (CORS مثلاً) افتح الملف في تاب جديد
+      showError?.('تعذر تحميل الملف مباشرة، سيتم فتحه في نافذة جديدة');
+      window.open(doc.url, '_blank', 'noopener,noreferrer');
+    } finally {
+      setDownloadingId(null);
     }
   };
 
@@ -118,24 +147,42 @@ const ReviewRequestModal = ({
           <div style={{ padding: '0 24px 20px' }}>
             <div style={{ fontSize: 12, fontWeight: 700, color: '#374151', marginBottom: 10 }}>Documents ({documents.length})</div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-              {documents.map((doc) => (
-                <div key={doc.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 12px', border: '1px solid #F0F0F0', borderRadius: 10, background: '#F9FAFB' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
-                    <FileText size={16} color="#6B7280" />
-                    <div style={{ minWidth: 0 }}>
-                      <div style={{ fontSize: 13, color: '#111827', fontWeight: 500, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{doc.name}</div>
-                      <div style={{ fontSize: 11, color: '#9CA3AF' }}>{[doc.type, doc.size, doc.date].filter(Boolean).join(' · ')}</div>
+              {documents.map((doc) => {
+                const isDownloading = downloadingId === doc.id;
+                return (
+                  <div key={doc.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 12px', border: '1px solid #F0F0F0', borderRadius: 10, background: '#F9FAFB' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
+                      <FileText size={16} color="#6B7280" />
+                      <div style={{ minWidth: 0 }}>
+                        <div style={{ fontSize: 13, color: '#111827', fontWeight: 500, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{doc.name}</div>
+                        <div style={{ fontSize: 11, color: '#9CA3AF' }}>{[doc.type, doc.size, doc.date].filter(Boolean).join(' · ')}</div>
+                      </div>
                     </div>
+                    {doc.url ? (
+                      <button
+                        type="button"
+                        onClick={() => handleDownload(doc)}
+                        disabled={isDownloading}
+                        style={{
+                          display: 'flex', alignItems: 'center', gap: 5, fontSize: 12,
+                          color: '#1D4ED8', fontWeight: 600, background: 'none', border: 'none',
+                          cursor: isDownloading ? 'not-allowed' : 'pointer', flexShrink: 0,
+                          opacity: isDownloading ? 0.6 : 1, padding: 0,
+                        }}
+                      >
+                        {isDownloading ? (
+                          <Loader2 size={13} className="spin" style={{ animation: 'spin 1s linear infinite' }} />
+                        ) : (
+                          <Download size={13} />
+                        )}
+                        {isDownloading ? 'جاري التحميل...' : 'View'}
+                      </button>
+                    ) : (
+                      <span style={{ fontSize: 11, color: '#9CA3AF', flexShrink: 0 }}>No file</span>
+                    )}
                   </div>
-                  {doc.url ? (
-                    <a href={doc.url} target="_blank" rel="noreferrer" style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 12, color: '#1D4ED8', fontWeight: 600, textDecoration: 'none', flexShrink: 0 }}>
-                      <Download size={13} /> View
-                    </a>
-                  ) : (
-                    <span style={{ fontSize: 11, color: '#9CA3AF', flexShrink: 0 }}>No file</span>
-                  )}
-                </div>
-              ))}
+                );
+              })}
             </div>
           </div>
         )}

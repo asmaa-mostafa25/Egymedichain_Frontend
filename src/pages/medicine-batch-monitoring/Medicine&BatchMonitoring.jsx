@@ -535,7 +535,7 @@ const BatchDetailsModal = ({ batchId, onClose }) => {
                       <InfoField label="Factory Name" value={details.factoryName} />
                       <InfoField label="Quantity" value={details.quantity?.toLocaleString()} />
                       <InfoField label="Manufacturing Date" value={details.productionDate} />
-                      <InfoField label="Expiry Date" value={details.expiryDate} />
+                      {/* <InfoField label="Expiry Date" value={details.expiryDate} /> */}
                       <InfoField label="Batch Status" value={details.batchStatus ? <BatchStatusBadge status={details.batchStatus} /> : '—'} />
                       <InfoField label="Supply Chain Stage" value={details.supplyChainStage ? <StageBadge status={details.supplyChainStage} /> : '—'} />
                       <InfoField label="Created By" value={details.createdBy} />
@@ -658,8 +658,8 @@ const TABLE_COLUMNS = [
   { key: 'factoryName',      label: 'Factory Name' },
   { key: 'quantity',         label: 'Quantity' },
   { key: 'batchLotNo',       label: 'Batch/Lot No.' },
-  { key: 'productionDate',   label: 'Production Date' },
-  { key: 'expiryDate',       label: 'Expiry Date' },
+  // { key: 'productionDate',   label: 'Production Date' },
+  // { key: 'expiryDate',       label: 'Expiry Date' },
   { key: 'supplyChainStage', label: 'Supply Chain Stage' },
   { key: 'batchStatus',      label: 'Batch Status' },
   { key: 'currentLocation',  label: 'Current Location' },

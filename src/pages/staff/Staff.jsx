@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
   Plus,
   Search,
@@ -131,7 +131,6 @@ const Staff = () => {
 
   const [loading, setLoading] = useState(true);
   const [staff, setStaff] = useState([]);
-  const [stats, setStats] = useState(null);
   const [pagination, setPagination] = useState({ page: 1, limit: 10, total: 0 });
   const [filters, setFilters] = useState({ search: '', role: '', status: '' });
   const [selectedStaff, setSelectedStaff] = useState(null);
@@ -154,7 +153,6 @@ const Staff = () => {
 
   useEffect(() => {
     fetchStaff();
-    fetchStats();
   }, [pagination.page, filters]);
 
   const fetchStaff = async () => {
@@ -167,7 +165,7 @@ const Staff = () => {
       });
       if (response.success) {
         setStaff(response.data.staff || []);
-        setPagination(prev => ({ ...prev, total: response.data.total || 0 }));
+        setPagination((prev) => ({ ...prev, total: response.data.total ?? (response.data.staff || []).length }));
       }
     } catch (err) {
       showError(err.message || 'Failed to load staff');
@@ -176,16 +174,29 @@ const Staff = () => {
     }
   };
 
-  const fetchStats = async () => {
-    try {
-      const response = await staffApi.getStats();
-      if (response.success) {
-        setStats(response.data);
-      }
-    } catch (err) {
-      // Stats are secondary
-    }
-  };
+  // ── Stats card values, computed straight from the loaded staff rows ──────
+  // Note: since `staff` only holds the current page (pagination.limit), the
+  // Active/Inactive/New-this-month counts reflect the current page only.
+  // `Total` uses pagination.total (the real server-side count) when
+  // available. If the backend later exposes a dedicated stats endpoint that
+  // aggregates across all pages, swap this out for that call.
+  const stats = useMemo(() => {
+    const total = pagination.total || staff.length;
+
+    const active = staff.filter((s) => s.status === 'active').length;
+    const inactive = staff.filter((s) => s.status === 'inactive' || s.status === 'suspended').length;
+
+    const now = new Date();
+    const newThisMonth = staff.filter((s) => {
+      const rawDate = s.hireDate || s.createdAt;
+      if (!rawDate) return false;
+      const d = new Date(rawDate);
+      if (Number.isNaN(d.getTime())) return false;
+      return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
+    }).length;
+
+    return { total, active, inactive, newThisMonth };
+  }, [staff, pagination.total]);
 
   const handleViewDetails = (member) => {
     setSelectedStaff(member);
@@ -344,8 +355,8 @@ const Staff = () => {
   });
 
   const columns = [
-    { 
-      key: 'name', 
+    {
+      key: 'name',
       label: 'Name',
       render: (value, row) => (
         <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--spacing-md)' }}>
@@ -363,47 +374,49 @@ const Staff = () => {
               color: 'var(--text-primary)',
             }}
           >
-            {value?.charAt(0)}
+            {value?.charAt(0)?.toUpperCase() || '?'}
           </div>
           <div>
-            <div style={{ fontWeight: 500, color: 'var(--text-primary)' }}>{value}</div>
-            <div style={{ fontSize: 'var(--font-size-xs)', color: 'var(--text-muted)' }}>{row.officialEmail || row.email}</div>
+            <div style={{ fontWeight: 500, color: 'var(--text-primary)' }}>{value || '-'}</div>
+            <div style={{ fontSize: 'var(--font-size-xs)', color: 'var(--text-muted)' }}>
+              {row.officialEmail || row.email || '-'}
+            </div>
           </div>
         </div>
-      )
+      ),
     },
-    { 
-      key: 'role', 
+    {
+      key: 'role',
       label: 'Role',
       render: (value) => (
         <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--spacing-xs)' }}>
           <Shield size={14} style={{ color: getRoleColor(value) }} />
           <span style={{ color: getRoleColor(value), fontWeight: 500 }}>
-            {value?.replace('_', ' ')}
+            {value ? value.replace('_', ' ') : '-'}
           </span>
         </div>
-      )
+      ),
     },
-    { 
-      key: 'department', 
+    {
+      key: 'department',
       label: 'Department',
       render: (value) => (
         <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--spacing-xs)' }}>
           <Building size={14} style={{ color: 'var(--text-muted)' }} />
-          {value}
+          {value || '-'}
         </div>
-      )
+      ),
     },
-    { key: 'facility', label: 'Facility' },
-    { 
-      key: 'status', 
+    { key: 'facility', label: 'Facility', render: (value) => value || '-' },
+    {
+      key: 'status',
       label: 'Status',
-      render: (value) => <StatusBadge status={value} size="sm" />
+      render: (value) => <StatusBadge status={value || 'inactive'} size="sm" />,
     },
-    { 
-      key: 'lastActive', 
+    {
+      key: 'lastActive',
       label: 'Last Active',
-      render: (value) => value || 'Never'
+      render: (value) => value || 'Never',
     },
     {
       key: 'actions',
@@ -433,63 +446,63 @@ const Staff = () => {
             <Trash2 size={16} />
           </button>
         </div>
-      )
+      ),
     },
   ];
 
   const statCards = [
-    { label: 'Total Staff', value: stats?.total || '-', color: 'var(--accent-primary)' },
-    { label: 'Active', value: stats?.active || '-', color: 'var(--accent-success)' },
-    { label: 'Inactive', value: stats?.inactive || '-', color: 'var(--text-muted)' },
-    { label: 'New This Month', value: stats?.newThisMonth || '-', color: 'var(--accent-info)' },
+    { label: 'Total Staff', value: stats.total ?? '-', color: 'var(--accent-primary)' },
+    { label: 'Active', value: stats.active ?? '-', color: 'var(--accent-success)' },
+    { label: 'Inactive', value: stats.inactive ?? '-', color: 'var(--text-muted)' },
+    { label: 'New This Month', value: stats.newThisMonth ?? '-', color: 'var(--accent-info)' },
   ];
 
   return (
     <div className="animate-fadeIn">
-  {/* Header */}
-  <div
-    style={{
-      display: 'flex',
-      justifyContent: 'space-between',
-      alignItems: 'center',
-      marginBottom: '32px',
-    }}
-  >
-    <div>
-      <h1
+      {/* Header */}
+      <div
         style={{
-          margin: 0,
-          fontSize: '38px',
-          fontWeight: 800,
-          lineHeight: 1.15,
-          letterSpacing: '-0.5px',
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          marginBottom: '32px',
         }}
       >
-        <span style={{ color: '#004399' }}>Staff </span>
-        <span style={{ color: '#111827' }}>Management</span>
-      </h1>
+        <div>
+          <h1
+            style={{
+              margin: 0,
+              fontSize: '38px',
+              fontWeight: 800,
+              lineHeight: 1.15,
+              letterSpacing: '-0.5px',
+            }}
+          >
+            <span style={{ color: '#004399' }}>Staff </span>
+            <span style={{ color: '#111827' }}>Management</span>
+          </h1>
 
-      <p
-        style={{
-          marginTop: '8px',
-          fontSize: '15px',
-          color: 'var(--text-muted)',
-        }}
-      >
-        Manage system users and their access permissions
-      </p>
-    </div>
+          <p
+            style={{
+              marginTop: '8px',
+              fontSize: '15px',
+              color: 'var(--text-muted)',
+            }}
+          >
+            Manage system users and their access permissions
+          </p>
+        </div>
 
-    <Button
-      variant="primary"
-      icon={Plus}
-      onClick={() => setAddStaffOpen(true)}
-    >
-      Add Staff Member
-    </Button>
-  </div>
+        <Button
+          variant="primary"
+          icon={Plus}
+          onClick={() => setAddStaffOpen(true)}
+        >
+          Add Staff Member
+        </Button>
+      </div>
 
-  {/* Stats Cards */}
+      {/* Stats Cards */}
       <div
         style={{
           display: 'grid',
@@ -647,11 +660,11 @@ const Staff = () => {
                     color: 'var(--text-primary)',
                   }}
                 >
-                  {selectedStaff.name?.charAt(0)}
+                  {selectedStaff.name?.charAt(0)?.toUpperCase() || '?'}
                 </div>
                 <div>
-                  <div style={{ fontSize: 'var(--font-size-lg)', fontWeight: 600, color: 'var(--text-primary)' }}>{selectedStaff.name}</div>
-                  <div style={{ fontSize: 'var(--font-size-sm)', color: 'var(--text-muted)' }}>{selectedStaff.role?.replace('_', ' ')}</div>
+                  <div style={{ fontSize: 'var(--font-size-lg)', fontWeight: 600, color: 'var(--text-primary)' }}>{selectedStaff.name || '-'}</div>
+                  <div style={{ fontSize: 'var(--font-size-sm)', color: 'var(--text-muted)' }}>{selectedStaff.role ? selectedStaff.role.replace('_', ' ') : '-'}</div>
                 </div>
               </div>
 
@@ -671,7 +684,7 @@ const Staff = () => {
                   <Mail size={14} style={{ color: 'var(--text-muted)' }} />
                   <span style={{ fontSize: 'var(--font-size-xs)', color: 'var(--text-muted)', textTransform: 'uppercase' }}>Official Email</span>
                 </div>
-                <div style={{ fontSize: 'var(--font-size-sm)', color: 'var(--text-primary)' }}>{selectedStaff.officialEmail || selectedStaff.email}</div>
+                <div style={{ fontSize: 'var(--font-size-sm)', color: 'var(--text-primary)' }}>{selectedStaff.officialEmail || selectedStaff.email || '-'}</div>
               </div>
               <div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--spacing-xs)', marginBottom: 'var(--spacing-xs)' }}>
@@ -734,15 +747,15 @@ const Staff = () => {
                   <Building size={14} style={{ color: 'var(--text-muted)' }} />
                   <span style={{ fontSize: 'var(--font-size-xs)', color: 'var(--text-muted)', textTransform: 'uppercase' }}>Department</span>
                 </div>
-                <div style={{ fontSize: 'var(--font-size-sm)', color: 'var(--text-primary)' }}>{selectedStaff.department}</div>
+                <div style={{ fontSize: 'var(--font-size-sm)', color: 'var(--text-primary)' }}>{selectedStaff.department || '-'}</div>
               </div>
               <div>
                 <span style={{ fontSize: 'var(--font-size-xs)', color: 'var(--text-muted)', textTransform: 'uppercase' }}>Facility</span>
-                <div style={{ fontSize: 'var(--font-size-sm)', color: 'var(--text-primary)' }}>{selectedStaff.facility}</div>
+                <div style={{ fontSize: 'var(--font-size-sm)', color: 'var(--text-primary)' }}>{selectedStaff.facility || '-'}</div>
               </div>
               <div>
                 <span style={{ fontSize: 'var(--font-size-xs)', color: 'var(--text-muted)', textTransform: 'uppercase' }}>Status</span>
-                <div style={{ marginTop: 'var(--spacing-xs)' }}><StatusBadge status={selectedStaff.status} /></div>
+                <div style={{ marginTop: 'var(--spacing-xs)' }}><StatusBadge status={selectedStaff.status || 'inactive'} /></div>
               </div>
             </div>
           </div>
@@ -803,11 +816,11 @@ const Staff = () => {
                   flexShrink: 0,
                 }}
               >
-                {resetTarget.name?.charAt(0)}
+                {resetTarget.name?.charAt(0)?.toUpperCase() || '?'}
               </div>
               <div>
-                <div style={{ fontSize: 'var(--font-size-sm)', fontWeight: 600, color: 'var(--text-primary)' }}>{resetTarget.name}</div>
-                <div style={{ fontSize: 'var(--font-size-xs)', color: 'var(--text-muted)' }}>{resetTarget.officialEmail || resetTarget.email}</div>
+                <div style={{ fontSize: 'var(--font-size-sm)', fontWeight: 600, color: 'var(--text-primary)' }}>{resetTarget.name || '-'}</div>
+                <div style={{ fontSize: 'var(--font-size-xs)', color: 'var(--text-muted)' }}>{resetTarget.officialEmail || resetTarget.email || '-'}</div>
               </div>
             </div>
 

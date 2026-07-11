@@ -1,6 +1,9 @@
 import axios from 'axios';
 import config from '../../config';
 
+// ⚠️ TEMPORARY — must match the token string set in authStore.mockLogin()
+const MOCK_TOKEN = 'mock-token-for-demo-account';
+
 // Create axios instance
 const axiosInstance = axios.create({
   baseURL: config.API_BASE_URL,
@@ -55,6 +58,22 @@ axiosInstance.interceptors.response.use(
 
     // Handle 401 - Unauthorized
     if (error.response?.status === 401 && !originalRequest._retry) {
+      // ⚠️ TEMPORARY — الحسابات الوهمية (demo accounts) بتستخدم توكن مزيف
+      // مبيعرفهوش الباك إند، فأي نداء API هيرجع 401 دايمًا. من غير الشرط ده
+      // كان بيتم عمل logout فوري وطرد اليوزر لصفحة اللوجين في كل مرة يفتح
+      // فيها صفحة بتعمل fetch. هنا بنتجاهل الـ 401 بتاع التوكن ده تحديدًا
+      // ونسيب الطلب يفشل بهدوء من غير ما نطرد اليوزر.
+      const currentToken = localStorage.getItem(config.TOKEN_KEY);
+      if (currentToken === MOCK_TOKEN) {
+        return Promise.reject({
+          data: null,
+          success: false,
+          message: 'Demo account: backend request rejected (expected).',
+          error: error.response?.data?.error || error,
+          status: 401,
+        });
+      }
+
       if (isRefreshing) {
         return new Promise((resolve, reject) => {
           failedQueue.push({ resolve, reject });

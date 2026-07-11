@@ -90,7 +90,7 @@ const TAB_CONFIG = [
       { key: 'legalCompanyName', label: 'Legal Company Name' },
       { key: 'governorate', label: 'Governorate' },
       { key: 'city', label: 'City' },
-      { key: 'licenseExpiryDate', label: 'License Expiry Date' },
+      // { key: 'licenseExpiryDate', label: 'License Expiry Date' },
       { key: 'hasColdStorage', label: 'Has Cold Storage', bool: true },
       { key: 'qcLab', label: 'QC Lab', bool: true },
       { key: 'totalBatches', label: 'Total Batches' },
@@ -116,7 +116,7 @@ const TAB_CONFIG = [
         { key: 'commercialRegNumber', label: 'Commercial Registration Number' },
         { key: 'taxCardNumber', label: 'Tax Card Number' },
         { key: 'licenseIssueDate', label: 'License Issue Date' },
-        { key: 'licenseExpiryDate', label: 'License Expiry Date' },
+        // { key: 'licenseExpiryDate', label: 'License Expiry Date' },
       ]},
       { title: 'Capabilities', fields: [
         { key: 'qcLab', label: 'Has Quality Control Lab?', bool: true },
@@ -139,7 +139,7 @@ const TAB_CONFIG = [
       { key: 'warehouseType', label: 'Warehouse Type' },
       { key: 'governorate', label: 'Governorate' },
       { key: 'city', label: 'City' },
-      { key: 'licenseExpiryDate', label: 'License Expiry Date' },
+      // { key: 'licenseExpiryDate', label: 'License Expiry Date' },
       { key: 'hasColdStorage', label: 'Has Cold Storage', bool: true },
       { key: 'factoryStatus', label: 'Factory Status', badge: true },
       { key: 'createdAt', label: 'Created At' },
@@ -162,7 +162,7 @@ const TAB_CONFIG = [
       { title: 'Licensing', fields: [
         { key: 'warehouseLicenseNumber', label: 'Warehouse License Number' },
         { key: 'licenseIssueDate', label: 'License Issue Date' },
-        { key: 'licenseExpiryDate', label: 'License Expiry Date' },
+        // { key: 'licenseExpiryDate', label: 'License Expiry Date' },
       ]},
       { title: 'Capabilities', fields: [
         { key: 'hasColdStorage', label: 'Has Cold Storage?', bool: true },
@@ -184,7 +184,7 @@ const TAB_CONFIG = [
       { key: 'pharmacyType', label: 'Pharmacy Type' },
       { key: 'governorate', label: 'Governorate' },
       { key: 'defaultWarehouse', label: 'Default Warehouse' },
-      { key: 'licenseExpiryDate', label: 'License Expiry Date' },
+      // { key: 'licenseExpiryDate', label: 'License Expiry Date' },
       { key: 'hasColdStorage', label: 'Has Cold Storage', bool: true },
       { key: 'factoryStatus', label: 'Factory Status', badge: true },
       { key: 'createdAt', label: 'Created At' },
@@ -211,7 +211,7 @@ const TAB_CONFIG = [
       { title: 'Licensing', fields: [
         { key: 'pharmacyLicenseNumber', label: 'Pharmacy License Number' },
         { key: 'licenseIssueDate', label: 'License Issue Date' },
-        { key: 'licenseExpiryDate', label: 'License Expiry Date' },
+        // { key: 'licenseExpiryDate', label: 'License Expiry Date' },
         { key: 'syndicateId', label: 'Pharmacist Syndicate ID' },
       ]},
       { title: 'Status', fields: [

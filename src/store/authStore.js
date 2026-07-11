@@ -4,21 +4,22 @@ import { authService } from '../api/services/authService'; // عدّل المس�
 import config from '../config';
 
 // يحدد صفحة الهبوط المناسبة حسب الدور
+// ⚠️ لازم كل مسار هنا يكون موجود فعليًا في src/routes (routes.jsx)
 function resolveHomeRoute(user) {
   if (!user) return '/login';
 
   switch (user.role) {
     case 'SuperAdmin':
     case 'MinistryAdmin':
-      return '/dashboard';
+      return '/overview';
     case 'FactoryUser':
-      return `/factory-dashboard/${user.entityId}`;
+      return '/entities-management';
     case 'WarehouseUser':
-      return `/warehouse-dashboard/${user.entityId}`;
+      return '/entities-management';
     case 'PharmacyUser':
-      return `/pharmacy-dashboard/${user.entityId}`;
+      return '/medicine-batch-monitoring';
     default:
-      return '/dashboard';
+      return '/overview';
   }
 }
 

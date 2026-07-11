@@ -7,28 +7,28 @@ import {
   X,
   Check,
   ChevronDown,
-  Users,
-  History,
+  AlertTriangle,
+  ScanLine,
   RefreshCw,
   Search,
-  UserCheck,
-  UserX,
-  ShieldOff,
-  ShieldCheck,
+  ShieldAlert,
+  CheckCircle2,
 } from 'lucide-react';
 import * as XLSX from 'xlsx';
-import { adminApi } from '../../api/services';
-import { mapAuditLogRow, mapSystemUserRow } from '../../api/mappers';
+import { alertsService, fetchAllAlertsData, fetchAlertsCounts, updateAlertStatus } from '../../api/services/alertsService';
 
 // ─── Shared badge colors ────────────────────────────────────────────────────
 
 const BADGE_COLORS = {
-  Active:      { bg: '#D1FAE5', color: '#059669' },
-  Inactive:    { bg: '#F3F4F6', color: '#6B7280' },
-  Suspended:   { bg: '#FEE2E2', color: '#DC2626' },
-  Success:     { bg: '#D1FAE5', color: '#059669' },
-  Failed:      { bg: '#FEE2E2', color: '#DC2626' },
-  Warning:     { bg: '#FEF3C7', color: '#B45309' },
+  Open:        { bg: '#FEE2E2', color: '#DC2626' },
+  'Under Review': { bg: '#FEF3C7', color: '#B45309' },
+  Resolved:    { bg: '#D1FAE5', color: '#059669' },
+  High:        { bg: '#FEE2E2', color: '#DC2626' },
+  Medium:      { bg: '#FEF3C7', color: '#B45309' },
+  Low:         { bg: '#F3F4F6', color: '#6B7280' },
+  Valid:       { bg: '#D1FAE5', color: '#059669' },
+  Suspicious:  { bg: '#FEE2E2', color: '#DC2626' },
+  Blocked:     { bg: '#FEE2E2', color: '#DC2626' },
 };
 const Badge = ({ value }) => {
   const s = BADGE_COLORS[value] || { bg: '#F3F4F6', color: '#374151' };
@@ -66,56 +66,81 @@ const StaticStatCard = ({ label, value, icon: Icon, loading }) => (
   </div>
 );
 
-// ─── Tab configuration — columns and row actions per tab ──────────────────
-// NOTE: `data` / mock fallback removed — everything now comes from the API.
+// ─── Tab configuration — columns and row actions per tab ─────
 
 const TAB_CONFIG = [
   {
-    key: 'users',
-    label: 'System Users',
-    tableTitle: 'System Users',
+    key: 'open',
+    label: 'Open Alert',
+    tableTitle: 'Alerts & Public Scans',
     columns: [
-      { key: 'name',      label: 'Name' },
-      { key: 'role',      label: 'Role' },
-      { key: 'entity',    label: 'Entity' },
-      { key: 'email',     label: 'Email' },
-      { key: 'status',    label: 'Status', badge: true },
-      { key: 'lastLogin', label: 'Last Login' },
+      { key: 'id',          label: 'Alert ID' },
+      { key: 'alertType',   label: 'Alert Type' },
+      { key: 'severity',    label: 'Severity', badge: true },
+      { key: 'entityType',  label: 'Entity Type' },
+      { key: 'entityName',  label: 'Entity Name' },
+      { key: 'batchNumber', label: 'Batch Number' },
+      { key: 'message',     label: 'Message' },
+      { key: 'createdAt',   label: 'Created At' },
+      { key: 'alertStatus', label: 'Alert Status', badge: true },
     ],
-    filterFields: ['role', 'status'],
+    filterFields: ['severity', 'alertStatus'],
     rowActions: [
-      { key: 'activate',   label: 'Activate User',    icon: ShieldCheck, color: '#059669' },
-      { key: 'deactivate', label: 'Deactivate User',   icon: ShieldOff,   color: '#D97706' },
-      { key: 'revoke',     label: 'Revoke Sessions',   icon: X,           color: '#DC2626' },
+      { key: 'view',    label: 'View Details',  icon: Eye,          color: '#374151' },
+      { key: 'resolve', label: 'Mark Resolved', icon: CheckCircle2, color: '#059669' },
     ],
   },
   {
-    key: 'logs',
-    label: 'Audit Logs',
-    tableTitle: 'Audit Logs',
+    key: 'scans',
+    label: 'Public Scan Logs',
+    tableTitle: 'Public Scan Logs',
     columns: [
-      { key: 'user',       label: 'User' },
-      { key: 'action',     label: 'Action' },
-      { key: 'entityType', label: 'Entity Type' },
-      { key: 'entityName', label: 'Entity Name' },
-      { key: 'ip',         label: 'IP Address' },
-      { key: 'result',     label: 'Result', badge: true },
-      { key: 'timestamp',  label: 'Timestamp' },
+      { key: 'id',                 label: 'Scan ID' },
+      { key: 'scannedGTIN',        label: 'GTIN' },
+      { key: 'scannedBatchNumber', label: 'Batch Number' },
+      { key: 'productName',        label: 'Product Name' },
+      { key: 'verificationResult', label: 'Result', badge: true },
+      { key: 'governorate',        label: 'Governorate' },
+      { key: 'city',               label: 'City' },
+      { key: 'scannedAt',          label: 'Scanned At' },
     ],
-    filterFields: ['entityType', 'result'],
+    filterFields: ['verificationResult', 'governorate'],
     rowActions: [
-      { key: 'view',   label: 'View Details', icon: Eye,      color: '#374151' },
-      { key: 'export', label: 'Export',       icon: Download, color: '#374151' },
+      { key: 'view',        label: 'View Details', icon: Eye,         color: '#374151' },
+      { key: 'createAlert', label: 'Create Alert', icon: ShieldAlert, color: '#DC2626' },
+    ],
+  },
+  {
+    key: 'recalls',
+    label: 'Recall Alerts',
+    tableTitle: 'Recall Alerts',
+    columns: [
+      { key: 'id',          label: 'Recall ID' },
+      { key: 'alertType',   label: 'Alert Type' },
+      { key: 'severity',    label: 'Severity', badge: true },
+      { key: 'entityType',  label: 'Entity Type' },
+      { key: 'entityName',  label: 'Entity Name' },
+      { key: 'batchNumber', label: 'Batch Number' },
+      { key: 'message',     label: 'Message' },
+      { key: 'createdAt',   label: 'Created At' },
+      { key: 'alertStatus', label: 'Alert Status', badge: true },
+    ],
+    filterFields: ['severity', 'alertStatus'],
+    rowActions: [
+      { key: 'view',    label: 'View Details',  icon: Eye,          color: '#374151' },
+      { key: 'resolve', label: 'Mark Resolved', icon: CheckCircle2, color: '#059669' },
     ],
   },
 ];
 
+const TAB_DATA_KEY = { open: 'openAlerts', scans: 'scanLogs', recalls: 'recallAlerts' };
+
 // ─── Filter dropdown ────────────────────────────────────────────────────────
 
 const FilterDropdown = ({ tab, data, activeFilters, onApply, onClear }) => {
-  const [open, setOpen]   = useState(false);
+  const [open, setOpen] = useState(false);
   const [local, setLocal] = useState(activeFilters);
-  const ref               = useRef(null);
+  const ref = useRef(null);
 
   useEffect(() => { setLocal(activeFilters); }, [activeFilters]);
 
@@ -129,7 +154,7 @@ const FilterDropdown = ({ tab, data, activeFilters, onApply, onClear }) => {
   const fieldLabels = Object.fromEntries(tab.columns.map(c => [c.key, c.label]));
   const optionsFor = (field) => ['All', ...Array.from(new Set(data.map(r => r[field]).filter(Boolean)))];
 
-  const hasActive   = Object.values(activeFilters).some(v => v && v !== 'All');
+  const hasActive = Object.values(activeFilters).some(v => v && v !== 'All');
   const activeCount = Object.values(activeFilters).filter(v => v && v !== 'All').length;
 
   const handleApply = () => { onApply(local); setOpen(false); };
@@ -186,7 +211,7 @@ const FilterDropdown = ({ tab, data, activeFilters, onApply, onClear }) => {
   );
 };
 
-// ─── Row menu (kebab) ───────────────────────────────────────────────────────
+// ─── Row menu (kebab) ──
 
 const RowMenu = ({ actions, onAction }) => {
   const [open, setOpen] = useState(false);
@@ -250,7 +275,7 @@ const DetailsDrawer = ({ tab, item, onClose }) => {
   );
 };
 
-// ─── Confirm modal (Activate / Deactivate / Revoke Sessions) ──────────────
+// ─── Confirm modal ─────
 
 const ConfirmModal = ({ title, message, confirmLabel, confirmColor, submitting, onClose, onConfirm }) => (
   <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.50)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9999 }} onClick={submitting ? undefined : onClose}>
@@ -283,84 +308,48 @@ const Toast = ({ message, type, onDismiss }) => {
 
 // ─── Main component ─────────────────────────────────────────────────────────
 
-const SystemUsersAuditLogs = () => {
-  const [activeTabKey, setActiveTabKey] = useState('users');
-  const [allData, setAllData] = useState({ users: [], logs: [] });
-  const [summary, setSummary] = useState(null);
-  const [summaryLoading, setSummaryLoading] = useState(true);
-  const [filtersByTab, setFiltersByTab] = useState(
-    Object.fromEntries(TAB_CONFIG.map(t => [t.key, Object.fromEntries(t.filterFields.map(f => [f, 'All']))]))
-  );
-  const [search, setSearch]               = useState('');
-  const [drawerItem, setDrawerItem]       = useState(null);
-  const [drawerLoading, setDrawerLoading] = useState(false);
+const EMPTY_FILTERS = Object.fromEntries(TAB_CONFIG.map(t => [t.key, Object.fromEntries(t.filterFields.map(f => [f, 'All']))]));
+
+const AlertsPublicScans = () => {
+  const [activeTabKey, setActiveTabKey] = useState('open');
+  const [allData, setAllData] = useState({ openAlerts: [], scanLogs: [], recallAlerts: [] });
+  const [counts, setCounts] = useState(null);
+  const [countsLoading, setCountsLoading] = useState(true);
+  const [filtersByTab, setFiltersByTab] = useState(EMPTY_FILTERS);
+  const [search, setSearch] = useState('');
+  const [drawerItem, setDrawerItem] = useState(null);
   const [pendingAction, setPendingAction] = useState(null);
   const [actionSubmitting, setActionSubmitting] = useState(false);
-  const [toast, setToast]                 = useState(null);
-  const [loading, setLoading]             = useState(false);
-  const [dataLoading, setDataLoading]     = useState(true);
-  const [loadError, setLoadError]         = useState(null);
-  const [checkedRows, setCheckedRows]     = useState({});
-  const [allChecked, setAllChecked]       = useState(false);
-  const [pagination, setPagination] = useState({
-    users: { page: 1, pageSize: 10, totalCount: 0 },
-    logs:  { page: 1, pageSize: 10, totalCount: 0 },
-  });
+  const [toast, setToast] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [demoMode, setDemoMode] = useState(false);
+  const [checkedRows, setCheckedRows] = useState({});
+  const [allChecked, setAllChecked] = useState(false);
 
-  const activeTab  = TAB_CONFIG.find(t => t.key === activeTabKey);
-  const activeData = allData[activeTabKey];
-  const filters    = filtersByTab[activeTabKey];
+  const activeTab = TAB_CONFIG.find(t => t.key === activeTabKey);
+  const activeData = allData[TAB_DATA_KEY[activeTabKey]];
+  const filters = filtersByTab[activeTabKey];
 
   const showToast = (msg, type = 'success') => setToast({ message: msg, type });
   const showError = (msg) => showToast(msg, 'error');
 
-  // ── Fetch summary (stat cards) ──
-  const fetchSummary = useCallback(async () => {
-    setSummaryLoading(true);
-    try {
-      const res = await adminApi.getUsersSummary();
-      setSummary(res?.data ?? res ?? null);
-    } catch (err) {
-      // stat cards fail silently — table errors are more actionable to the user
-      setSummary(null);
-    } finally {
-      setSummaryLoading(false);
-    }
+  // ── Fetchers ──
+  const fetchCounts = useCallback(async () => {
+    setCountsLoading(true);
+    const res = await fetchAlertsCounts();
+    setCounts(res);
+    setCountsLoading(false);
   }, []);
 
-  // ── Fetch table data for a given tab ──
-  const fetchTabData = useCallback(async (tabKey) => {
-    setDataLoading(true);
-    setLoadError(null);
-    try {
-      const { page, pageSize } = pagination[tabKey];
-      if (tabKey === 'users') {
-        const res = await adminApi.getUsers({ page, pageSize });
-        const payload = res?.data ?? res ?? {};
-        const items = payload.items ?? payload.results ?? payload;
-        const rows = (Array.isArray(items) ? items : []).map(mapSystemUserRow);
-        setAllData(prev => ({ ...prev, users: rows }));
-        setPagination(prev => ({ ...prev, users: { ...prev.users, totalCount: payload.totalCount ?? rows.length } }));
-      } else {
-        const res = await adminApi.getAuditLogs({ page, pageSize });
-        const payload = res?.data ?? res ?? {};
-        const items = payload.items ?? payload.results ?? payload;
-        const rows = (Array.isArray(items) ? items : []).map(mapAuditLogRow);
-        setAllData(prev => ({ ...prev, logs: rows }));
-        setPagination(prev => ({ ...prev, logs: { ...prev.logs, totalCount: payload.totalCount ?? rows.length } }));
-      }
-    } catch (err) {
-      setLoadError(err?.message || 'Failed to load data');
-      showError('فشل تحميل البيانات، حاول مرة أخرى');
-    } finally {
-      setDataLoading(false);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pagination.users.page, pagination.users.pageSize, pagination.logs.page, pagination.logs.pageSize]);
+  const fetchData = useCallback(async () => {
+    setLoading(true);
+    const res = await fetchAllAlertsData();
+    setAllData({ openAlerts: res.openAlerts, scanLogs: res.scanLogs, recallAlerts: res.recallAlerts });
+    setDemoMode(!!res.demoMode);
+    setLoading(false);
+  }, []);
 
-  // initial load + summary
-  useEffect(() => { fetchSummary(); }, [fetchSummary]);
-  useEffect(() => { fetchTabData(activeTabKey); }, [activeTabKey]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { fetchCounts(); fetchData(); }, [fetchCounts, fetchData]);
 
   useEffect(() => { setSearch(''); setCheckedRows({}); setAllChecked(false); }, [activeTabKey]);
 
@@ -394,9 +383,8 @@ const SystemUsersAuditLogs = () => {
 
   const handleRefresh = async () => {
     setLoading(true);
-    setFiltersByTab(Object.fromEntries(TAB_CONFIG.map(t => [t.key, Object.fromEntries(t.filterFields.map(f => [f, 'All']))])));
     try {
-      await Promise.all([fetchSummary(), fetchTabData(activeTabKey)]);
+      await Promise.all([fetchCounts(), fetchData()]);
       showToast('Data refreshed');
     } finally {
       setLoading(false);
@@ -404,30 +392,10 @@ const SystemUsersAuditLogs = () => {
   };
 
   // ── Row action dispatch ──
-  const handleRowAction = async (key, row) => {
-    if (activeTabKey === 'users') {
-      if (key === 'activate' || key === 'deactivate' || key === 'revoke') {
-        setPendingAction({ key, row });
-        return;
-      }
-    }
-    if (activeTabKey === 'logs') {
-      if (key === 'view') {
-        setDrawerItem(row);
-        setDrawerLoading(true);
-        try {
-          const res = await adminApi.getAuditLogById(row.id);
-          const payload = res?.data ?? res;
-          if (payload) setDrawerItem(mapAuditLogRow(payload));
-        } catch (err) {
-          // keep the row data we already have if the detail fetch fails
-        } finally {
-          setDrawerLoading(false);
-        }
-        return;
-      }
-      if (key === 'export') { handleExport([row]); return; }
-    }
+  const handleRowAction = (key, row) => {
+    if (key === 'view') { setDrawerItem(row); return; }
+    if (key === 'resolve') { setPendingAction({ key, row }); return; }
+    if (key === 'createAlert') { setPendingAction({ key, row }); return; }
   };
 
   const confirmPendingAction = async () => {
@@ -435,19 +403,20 @@ const SystemUsersAuditLogs = () => {
     const { key, row } = pendingAction;
     setActionSubmitting(true);
     try {
-      if (key === 'activate') {
-        await adminApi.activateUser(row.id);
-        setAllData(prev => ({ ...prev, users: prev.users.map(u => u.id === row.id ? { ...u, status: 'Active' } : u) }));
-        showToast(`${row.name} activated`);
-      } else if (key === 'deactivate') {
-        await adminApi.deactivateUser(row.id);
-        setAllData(prev => ({ ...prev, users: prev.users.map(u => u.id === row.id ? { ...u, status: 'Inactive' } : u) }));
-        showToast(`${row.name} deactivated`);
-      } else if (key === 'revoke') {
-        await adminApi.revokeSessions(row.id);
-        showToast(`Sessions revoked for ${row.name}`);
+      if (key === 'resolve') {
+        await updateAlertStatus(activeTabKey, row.id, 'Resolved');
+        setAllData(prev => ({
+          ...prev,
+          [TAB_DATA_KEY[activeTabKey]]: prev[TAB_DATA_KEY[activeTabKey]].map(a =>
+            a.id === row.id ? { ...a, alertStatus: 'Resolved' } : a
+          ),
+        }));
+        showToast(`${row.id} marked as resolved`);
+      } else if (key === 'createAlert') {
+        await alertsService.createAlertFromPublicScan(row.id, { severity: 'High' });
+        showToast(`Alert created from ${row.id}`);
       }
-      fetchSummary(); // stat cards may have changed (active/inactive counts)
+      fetchCounts();
       setPendingAction(null);
     } catch (err) {
       showError(err?.message || 'حدث خطأ أثناء تنفيذ العملية');
@@ -457,10 +426,15 @@ const SystemUsersAuditLogs = () => {
   };
 
   const confirmCopy = {
-    activate:   { title: 'Activate User',   message: `Activate ${pendingAction?.row?.name}? They will regain access to the platform.`,        confirmLabel: 'Activate',   confirmColor: '#059669' },
-    deactivate: { title: 'Deactivate User', message: `Deactivate ${pendingAction?.row?.name}? They will lose access until reactivated.`,       confirmLabel: 'Deactivate', confirmColor: '#D97706' },
-    revoke:     { title: 'Revoke Sessions', message: `End all active sessions for ${pendingAction?.row?.name} across every device?`,          confirmLabel: 'Revoke',     confirmColor: '#DC2626' },
+    resolve:     { title: 'Mark as Resolved', message: `Mark ${pendingAction?.row?.id} as resolved? This closes the alert.`, confirmLabel: 'Mark Resolved', confirmColor: '#059669' },
+    createAlert: { title: 'Create Alert',     message: `Create a new alert from scan ${pendingAction?.row?.id}?`,             confirmLabel: 'Create Alert',  confirmColor: '#DC2626' },
   };
+
+  const statCards = [
+    { label: 'Open Alerts',      value: counts?.openAlerts ?? 0,     icon: AlertTriangle },
+    { label: 'Public Scan Logs', value: counts?.publicScanLogs ?? 0, icon: ScanLine },
+    { label: 'Recall Alerts',    value: counts?.recallAlerts ?? 0,   icon: ShieldAlert },
+  ];
 
   return (
     <div style={{ fontFamily: 'Inter, SF Pro, -apple-system, sans-serif', padding: '28px 32px', boxSizing: 'border-box', background: '#F8F9FB', minHeight: '100vh' }}>
@@ -469,31 +443,32 @@ const SystemUsersAuditLogs = () => {
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 20 }}>
         <div>
           <h1 style={{ margin: 0, fontSize: 32, fontWeight: 800, lineHeight: 1.15, letterSpacing: '-0.5px' }}>
-            <span style={{ color: '#004399' }}>System </span>
-            <span style={{ color: '#111827' }}>Users & Audit Logs</span>
+            <span style={{ color: '#004399' }}>Alerts & </span>
+            <span style={{ color: '#111827' }}>Public Scans</span>
           </h1>
           <p style={{ marginTop: 8, marginBottom: 0, fontSize: 14, color: '#9CA3AF', fontWeight: 400 }}>
             Monitor and manage the pharmaceutical supply chain across Egypt
           </p>
         </div>
-        <button onClick={handleRefresh} disabled={loading} style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '9px 16px', borderRadius: 10, border: '1px solid #E5E7EB', background: '#fff', fontSize: 13, color: '#374151', fontWeight: 500, cursor: loading ? 'not-allowed' : 'pointer' }}>
-          <RefreshCw size={14} color="#6B7280" style={loading ? { animation: 'spin 0.8s linear infinite' } : undefined} />
-          Refresh
-        </button>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          {demoMode && (
+            <span style={{ fontSize: 11, fontWeight: 600, color: '#B45309', background: '#FEF3C7', padding: '5px 10px', borderRadius: 20 }}>
+              Demo Data
+            </span>
+          )}
+          <button onClick={handleRefresh} disabled={loading} style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '9px 16px', borderRadius: 10, border: '1px solid #E5E7EB', background: '#fff', fontSize: 13, color: '#374151', fontWeight: 500, cursor: loading ? 'not-allowed' : 'pointer' }}>
+            <RefreshCw size={14} color="#6B7280" style={loading ? { animation: 'spin 0.8s linear infinite' } : undefined} />
+            Refresh
+          </button>
+        </div>
       </div>
       <style>{'@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }'}</style>
 
-      {loadError && (
-        <div style={{ marginBottom: 16, padding: '10px 16px', borderRadius: 10, background: '#FEE2E2', color: '#DC2626', fontSize: 13 }}>
-          {loadError}
-        </div>
-      )}
-
       {/* ── Stat cards ── */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 20, marginBottom: 28 }}>
-        <StaticStatCard label="Total Users" value={summary?.totalUsers ?? 0} icon={Users} loading={summaryLoading} />
-        <StaticStatCard label="Active Users" value={summary?.activeUsers ?? 0} icon={UserCheck} loading={summaryLoading} />
-        <StaticStatCard label="Inactive Users" value={summary?.inactiveUsers ?? 0} icon={UserX} loading={summaryLoading} />
+        {statCards.map(c => (
+          <StaticStatCard key={c.label} label={c.label} value={c.value} icon={c.icon} loading={countsLoading} />
+        ))}
       </div>
 
       {/* ── Tabs ── */}
@@ -539,8 +514,8 @@ const SystemUsersAuditLogs = () => {
               tab={activeTab}
               data={activeData}
               activeFilters={filters}
-              onApply={f => setFiltersByTab(p => ({ ...p, [activeTabKey]: f }))}
-              onClear={f => setFiltersByTab(p => ({ ...p, [activeTabKey]: f }))}
+              onApply={f => setFiltersByTab(p => ({ ...p, [activeTabKey]: { ...p[activeTabKey], ...f } }))}
+              onClear={f => setFiltersByTab(p => ({ ...p, [activeTabKey]: { ...p[activeTabKey], ...f } }))}
             />
             <button onClick={() => handleExport()} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '7px 14px', borderRadius: 8, border: '1px solid #E5E7EB', background: '#fff', fontSize: 13, color: '#374151', cursor: 'pointer', fontWeight: 500 }}>
               <Download size={13} />
@@ -564,7 +539,7 @@ const SystemUsersAuditLogs = () => {
               </tr>
             </thead>
             <tbody>
-              {dataLoading ? (
+              {loading ? (
                 <tr><td colSpan={activeTab.columns.length + 2} style={{ textAlign: 'center', padding: '40px 0', color: '#9CA3AF' }}>Loading…</td></tr>
               ) : filteredData.length === 0 ? (
                 <tr><td colSpan={activeTab.columns.length + 2} style={{ textAlign: 'center', padding: '40px 0', color: '#9CA3AF' }}>No records found</td></tr>
@@ -591,41 +566,16 @@ const SystemUsersAuditLogs = () => {
           </table>
         </div>
 
-        {/* Pagination */}
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 20px', borderTop: '1px solid #F3F4F6', fontSize: 12, color: '#9CA3AF' }}>
-          <span>
-            Showing {filteredData.length} of {pagination[activeTabKey].totalCount || activeData.length} records
-          </span>
-          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-            <button
-              disabled={pagination[activeTabKey].page <= 1 || dataLoading}
-              onClick={() => setPagination(p => ({ ...p, [activeTabKey]: { ...p[activeTabKey], page: p[activeTabKey].page - 1 } }))}
-              style={{ padding: '5px 10px', borderRadius: 6, border: '1px solid #E5E7EB', background: '#fff', cursor: pagination[activeTabKey].page <= 1 ? 'not-allowed' : 'pointer', fontSize: 12 }}
-            >
-              Prev
-            </button>
-            <span>Page {pagination[activeTabKey].page}</span>
-            <button
-              disabled={dataLoading || activeData.length < pagination[activeTabKey].pageSize}
-              onClick={() => setPagination(p => ({ ...p, [activeTabKey]: { ...p[activeTabKey], page: p[activeTabKey].page + 1 } }))}
-              style={{ padding: '5px 10px', borderRadius: 6, border: '1px solid #E5E7EB', background: '#fff', cursor: 'pointer', fontSize: 12 }}
-            >
-              Next
-            </button>
-          </div>
+        {/* Footer count */}
+        <div style={{ padding: '12px 20px', borderTop: '1px solid #F3F4F6', fontSize: 12, color: '#9CA3AF' }}>
+          Showing {filteredData.length} of {activeData.length} records
         </div>
       </div>
 
-      {/* ── Details drawer (Audit Logs → View Details) ── */}
-      {drawerItem && (
-        <DetailsDrawer
-          tab={activeTab}
-          item={drawerLoading ? drawerItem : drawerItem}
-          onClose={() => setDrawerItem(null)}
-        />
-      )}
+      {/* ── Details drawer ── */}
+      {drawerItem && <DetailsDrawer tab={activeTab} item={drawerItem} onClose={() => setDrawerItem(null)} />}
 
-      {/* ── Confirm modal (System Users → Activate / Deactivate / Revoke Sessions) ── */}
+      {/* ── Confirm modal (Mark Resolved / Create Alert) ── */}
       {pendingAction && (
         <ConfirmModal
           {...confirmCopy[pendingAction.key]}
@@ -641,4 +591,4 @@ const SystemUsersAuditLogs = () => {
   );
 };
 
-export default SystemUsersAuditLogs;
+export default AlertsPublicScans;
