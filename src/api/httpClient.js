@@ -1,5 +1,4 @@
-// ضع هذا الملف داخل: src/api/httpClient.js
-// ويعتمد على ملف الإعدادات الموجود عندك بالفعل: src/config.js
+
 import config from '../config';
 
 function getToken() {
@@ -122,3 +121,4 @@ export const httpClient = {
 };
 
 export { getToken, getRefreshToken, setTokens, clearSession };
+

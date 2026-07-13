@@ -216,3 +216,25 @@ export function mapPharmacyProfile(item) {
     updatedAt: formatDisplayDate(item.updatedAt),
   };
 }
+// BatchListItemDto -> table row shape used by WarehouseDashboard's Batches tab
+
+// AlertListItemDto -> table row shape used by WarehouseDashboard's Alerts tab
+
+// Full detail versions for the drawer (BatchDetailsDto / AlertDetailsDto)
+export const mapBatchDetails = (dto) => ({
+  id: dto.id,
+  productName: dto.productInfo?.productName,
+  batchNumber: dto.batchInfo?.batchNumber,
+  factory: dto.batchInfo?.factoryName,
+  batchStatus: dto.batchInfo?.batchStatus,
+  lastUpdate: dto.batchInfo?.updatedAt ? dto.batchInfo.updatedAt.split('T')[0] : '',
+});
+
+export const mapAlertDetails = (dto) => ({
+  id: dto.id,
+  alertType: dto.alertType,
+  severity: dto.severity,
+  entityType: dto.entityType,
+  date: dto.createdAt ? dto.createdAt.split('T')[0] : '',
+  status: dto.alertStatus,
+});

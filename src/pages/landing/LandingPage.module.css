@@ -1,0 +1,184 @@
+/* src/pages/landing/LandingPage.module.css */
+
+.page {
+  position: relative;
+  min-height: 100vh;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  background-image: url('/images/home/home-building-bg.png');
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+  overflow-x: hidden;
+  font-family: 'SF Pro', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+}
+
+.overlay {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(180deg, rgba(4, 20, 45, 0.65) 0%, rgba(4, 20, 45, 0.45) 45%, rgba(4, 20, 45, 0.7) 100%);
+  z-index: 0;
+}
+
+/* --- Header --------------------------------------------------------------- */
+
+.header {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  padding: clamp(16px, 3vw, 28px) clamp(16px, 4vw, 48px) 0;
+  flex-wrap: wrap;
+}
+
+.logo {
+  height: clamp(48px, 6vw, 64px);
+  width: auto;
+  object-fit: contain;
+}
+
+.ministryArea {
+  display: flex;
+  align-items: center;
+  gap: clamp(10px, 2vw, 20px);
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.languageSelector {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: transparent;
+  border: none;
+  color: #ffffff;
+  font-size: 15px;
+  font-weight: 500;
+  cursor: pointer;
+  padding: 4px;
+}
+
+.chevron {
+  font-size: 10px;
+}
+
+.ministryText {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  color: #ffffff;
+  line-height: 1.3;
+}
+
+.ministryTextAr {
+  font-size: clamp(13px, 1.4vw, 16px);
+  font-weight: 600;
+}
+
+.ministryTextEn {
+  font-size: clamp(11px, 1.1vw, 13px);
+  color: #e5e7eb;
+}
+
+.ministryLogo {
+  height: clamp(40px, 5vw, 56px);
+  width: auto;
+  object-fit: contain;
+}
+
+/* --- Center content --------------------------------------------------------- */
+
+.content {
+  position: relative;
+  z-index: 1;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  gap: clamp(18px, 3vw, 28px);
+  padding: 48px 20px;
+}
+
+.title {
+  margin: 0;
+  max-width: 700px;
+  font-weight: 700;
+  font-size: clamp(30px, 6vw, 55px);
+  line-height: 1.15;
+  color: #ffffff;
+  text-shadow: 0px 12px 4px rgba(0, 0, 0, 0.25);
+  letter-spacing: 0.5px;
+}
+
+.titleGap {
+  display: inline-block;
+  width: clamp(10px, 1.6vw, 22px);
+}
+
+.subtitle {
+  margin: 0;
+  max-width: 640px;
+  color: #ffffff;
+  font-size: clamp(15px, 2vw, 19px);
+  font-weight: 500;
+  line-height: 1.5;
+  text-shadow: 0px 2px 6px rgba(0, 0, 0, 0.35);
+}
+
+.authActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 18px;
+  justify-content: center;
+}
+
+.pillButton {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  width: min(340px, 90vw);
+  height: clamp(56px, 8vw, 75px);
+  padding: 10px 24px;
+  background: #ffffff;
+  box-shadow: 0px 5px 10px rgba(0, 0, 0, 0.25);
+  border: none;
+  border-radius: 50px;
+  color: #003392;
+  font-family: inherit;
+  font-size: clamp(15px, 2vw, 18px);
+  font-weight: 700;
+  cursor: pointer;
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.pillButton:hover {
+  transform: translateY(-2px);
+  box-shadow: 0px 8px 16px rgba(0, 0, 0, 0.3);
+}
+
+.pillButton:active {
+  transform: translateY(0);
+}
+
+/* --- Responsiveness -------------------------------------------------------- */
+
+@media (max-width: 640px) {
+  .header {
+    justify-content: center;
+    text-align: center;
+  }
+
+  .ministryArea {
+    justify-content: center;
+  }
+
+  .ministryText {
+    align-items: center;
+  }
+}

@@ -1,0 +1,120 @@
+/* src/pages/home/HomePage.module.css */
+
+.page {
+  width: 100%;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  background: #ffffff;
+  overflow-x: hidden;
+  font-family: 'SF Pro', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+}
+
+/* --- Hero ------------------------------------------------------------------ */
+
+.hero {
+  width: 100%;
+  max-width: 900px;
+  margin: 0 auto;
+  padding: clamp(32px, 6vw, 56px) 20px clamp(40px, 6vw, 64px);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: clamp(20px, 3vw, 32px);
+}
+
+.heroTitleWrapper {
+  position: relative;
+  width: 100%;
+  display: flex;
+  justify-content: center;
+}
+
+.heroTitle,
+.heroTitleGhost {
+  margin: 0;
+  font-weight: 800;
+  font-size: clamp(28px, 5.5vw, 52px);
+  line-height: 1.15;
+}
+
+.heroTitle {
+  position: relative;
+  z-index: 1;
+}
+
+.heroTitleBlue {
+  color: #004399;
+}
+
+.heroTitleDark {
+  color: #111827;
+}
+
+/* Faint duplicate title behind the real one, matching the layered look
+   from the screenshot, without needing an extra image asset. */
+.heroTitleGhost {
+  position: absolute;
+  top: 6px;
+  left: 0;
+  right: 0;
+  color: #d1d5db;
+  opacity: 0.5;
+  filter: blur(1px);
+  user-select: none;
+  z-index: 0;
+}
+
+.descriptionCard {
+  width: 100%;
+  max-width: 620px;
+  background: #ffffff;
+  border: 1px solid #e5e7eb;
+  border-radius: 16px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.08);
+  padding: 18px 24px;
+}
+
+.descriptionCard p {
+  margin: 0;
+  color: #374151;
+  font-size: clamp(14px, 1.8vw, 17px);
+  line-height: 1.6;
+  font-weight: 500;
+}
+
+.heroCircleImage {
+  width: clamp(180px, 24vw, 280px);
+  height: clamp(180px, 24vw, 280px);
+  border-radius: 50%;
+  object-fit: cover;
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.18);
+}
+
+.dashboardButton {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: min(360px, 90vw);
+  padding: 16px 32px;
+  background: linear-gradient(90deg, #004399 21.15%, #9ebef1 92.31%);
+  border: none;
+  border-radius: 999px;
+  color: #ffffff;
+  font-family: inherit;
+  font-size: clamp(15px, 2vw, 18px);
+  font-weight: 700;
+  cursor: pointer;
+  box-shadow: 0 8px 20px rgba(0, 67, 153, 0.3);
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.dashboardButton:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 12px 26px rgba(0, 67, 153, 0.38);
+}
+
+.dashboardButton:active {
+  transform: translateY(0);
+}

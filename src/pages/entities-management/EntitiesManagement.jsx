@@ -7,7 +7,7 @@ import {
 } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import ReviewRequestModal from './ReviewRequestModal';
-import { overviewService } from '../../api/services/admin';
+import { overviewService, factoryService, registrationRequestService } from '../../api/services/admin';
 import { ENTITY_API } from '../entities/entitiesConfig';
 
 // ─── Badge / BoolIcon (زي ما هما) ───────────────────────────────────────────
@@ -388,6 +388,40 @@ const Toast = ({ message, type, onDismiss }) => {
   );
 };
 
+// ─── Review-request field/document builders (RegistrationRequestDetailsDto → modal props) ──
+
+const buildRequestFields = (details) => {
+  if (!details) return [];
+  const e = details.entity || {};
+  const a = details.account || {};
+  return [
+    ['Request Code', details.requestCode],
+    ['Entity Type', details.entityType],
+    ['Submitted At', details.submittedAt ? new Date(details.submittedAt).toLocaleString() : ''],
+    ['Registration Status', details.registrationStatus],
+    ['Representative Name', a.fullName],
+    ['Representative Email', a.email],
+    ['Mobile Number', a.mobileNumber],
+    ['Governorate', e.governorate],
+    ['City', e.city],
+    ['Full Address', e.fullAddress],
+    ['Admin Notes', details.adminNotes],
+    ['Rejection Reason', details.rejectionReason],
+  ].filter(([, value]) => value !== undefined && value !== null && value !== '');
+};
+
+const buildDocuments = (details) => {
+  if (!details?.documents) return [];
+  return details.documents.map((doc) => ({
+    id: doc.id,
+    name: doc.fileName,
+    url: doc.fileUrl,
+    type: (doc.documentType || 'FILE').slice(0, 4).toUpperCase(),
+    date: doc.uploadedAt ? new Date(doc.uploadedAt).toLocaleDateString() : '--',
+    size: undefined,
+  }));
+};
+
 // ─── Main component ─────────────────────────────────────────────────────
 
 const EntitiesManagement = () => {
@@ -530,8 +564,22 @@ const EntitiesManagement = () => {
   };
   const toggleRow = (id) => setCheckedRows(p => ({ ...p, [id]: !p[id] }));
 
-  const handleSecondaryAction = (sa) => {
-    showToast(`${sa.label} — coming soon`, 'info');
+  // Secondary row actions now call the real per-entity endpoints
+  // (factories/{id}/batches, warehouses/{id}/inventory|shipments, pharmacies/{id}/inventory|shipments).
+  const handleSecondaryAction = async (sa, row) => {
+    try {
+      let res;
+      if (sa.key === 'viewBatches') {
+        res = await api.service.getBatches(row.id, { page: 1, pageSize: 10 });
+      } else if (sa.key === 'viewInventory') {
+        res = await api.service.getInventory(row.id, { page: 1, pageSize: 10 });
+      } else if (sa.key === 'viewShipments' || sa.key === 'viewReceivedShipments') {
+        res = await api.service.getShipments(row.id, { page: 1, pageSize: 10 });
+      }
+      showToast(`${sa.label}: ${res?.totalCount ?? 0} record(s) found for ${row[activeTab.nameField]}`, 'info');
+    } catch (err) {
+      showError(err.message || `Failed to load ${sa.label}`);
+    }
   };
 
   const handleViewProfile = async (row) => {
@@ -561,10 +609,56 @@ const EntitiesManagement = () => {
     }
   };
 
-  const handleOpenReview = () => {
-    // TODO: entities list DTOs لا تحتوي registrationRequestId حاليًا،
-    // فمفيش ربط مباشر بين الـ entity وطلب التسجيل الأصلي بتاعه.
-    showToast('Review Request — needs registrationRequestId in the API response', 'info');
+  // "Review Request" — the Swagger has no endpoint that returns the
+  // registration request behind an already-approved entity, so this
+  // resolves it via a best-effort lookup (factory profile → request
+  // number → search registration-requests by that code). See the
+  // integration report for the backend endpoint that would replace this.
+  const handleOpenReview = async (row) => {
+    if (activeTabKey !== 'factories') {
+      showError('Review Request needs a registrationRequestId link from the backend for this entity type (see integration report)');
+      return;
+    }
+    try {
+      const fullProfile = await factoryService.getFullProfile(row.id);
+      const requestCode = fullProfile?.registrationInfo?.registrationRequestNo;
+      if (!requestCode) {
+        showError('No registration request reference found for this factory');
+        return;
+      }
+      const list = await registrationRequestService.getAll({ search: requestCode, page: 1, pageSize: 1 });
+      const match = list?.items?.[0];
+      if (!match) {
+        showError('Matching registration request could not be found');
+        return;
+      }
+      const details = await registrationRequestService.getById(match.id);
+      setReviewItem({ row, tab: activeTab, details });
+    } catch (err) {
+      showError(err.message || 'Failed to load registration request');
+    }
+  };
+
+  const handleReviewAction = async (action, item) => {
+    const requestId = reviewItem?.details?.id;
+    if (!requestId) { setReviewItem(null); return; }
+    try {
+      if (action === 'approve') {
+        await registrationRequestService.approve(requestId);
+        showToast('Registration request approved');
+      } else if (action === 'reject') {
+        await registrationRequestService.reject(requestId, 'Rejected from Entities Management');
+        showToast('Registration request rejected');
+      } else if (action === 'inspection') {
+        // No backend endpoint exists for scheduling an inspection — see integration report.
+        showError('Request Inspection is not supported by the backend yet');
+        return;
+      }
+      setReviewItem(null);
+      fetchList();
+    } catch (err) {
+      showError(err.message || 'Action failed');
+    }
   };
 
   return (
@@ -710,9 +804,11 @@ const EntitiesManagement = () => {
           item={reviewItem.row}
           onClose={() => setReviewItem(null)}
           showError={showError}
-          onAction={() => setReviewItem(null)}
+          onAction={handleReviewAction}
           entityLabel={reviewItem.tab.singular}
           headerTitle={`${reviewItem.tab.singular} Registration Request`}
+          requestFields={buildRequestFields(reviewItem.details)}
+          documents={buildDocuments(reviewItem.details)}
         />
       )}
 

@@ -1,36 +1,40 @@
 import { useEffect, useState, useRef } from 'react';
 import {
-  Filter,
-  Download,
-  Eye,
-  Edit,
-  Trash2,
-  MoreVertical,
-  X,
-  Check,
-  ChevronDown,
-  Package,
-  ClipboardCheck,
-  RefreshCw,
-  AlertTriangle,
-  Home,
-  Clock,
-  Truck,
-  History,
+  Filter, Download, Eye, Edit, Trash2, MoreVertical, X, Check, ChevronDown,
+  Package, ClipboardCheck, RefreshCw, AlertTriangle, Home, Clock, Truck, History,
 } from 'lucide-react';
 import * as XLSX from 'xlsx';
-import { registrationRequestsApi } from '../../api/services';
+import { registrationRequestsApi, batchesApi, alertsApi, adminApi } from '../../api/services';
+import { mapBatchRow, mapAlertRow, mapBatchDetails, mapAlertDetails } from '../../api/mappers';
 import ReviewRequestModal from "./ReviewRequestModal";
 
-const MOCK_DOCUMENTS = [
-  { id: 1, name: 'Warehouse License.pdf',         type: 'PDF',  size: '1.8 MB', date: '2024-03-12', url: null },
-  { id: 2, name: 'Storage Inspection Report.pdf', type: 'PDF',  size: '0.9 MB', date: '2024-03-10', url: null },
-  { id: 3, name: 'Facility Certificate.pdf',      type: 'PDF',  size: '2.1 MB', date: '2024-02-28', url: null },
-  { id: 4, name: 'Capacity Report.xlsx',          type: 'XLSX', size: '1.2 MB', date: '2024-03-08', url: null },
+// ─── Demo fallback data — used ONLY if the API errors or returns an empty list ──
+const DEMO_REQUESTS = [
+  { id: 'REQ-001', entityType: 'Warehouse',    entityName: 'Delta Medical Storage',        submittedBy: 'Ahmed',  submittedAt: 'May 16, 2024', status: 'Pending'      },
+  { id: 'REQ-002', entityType: 'Manufacturer', entityName: 'Cairo Pharma Factory',         submittedBy: 'Mohamed',submittedAt: 'May 15, 2024', status: 'Under Review' },
+  { id: 'REQ-003', entityType: 'Warehouse',    entityName: 'Alexandria Storage',           submittedBy: 'Saif',   submittedAt: 'May 15, 2024', status: 'Pending'      },
+  { id: 'REQ-004', entityType: 'Pharmacy',     entityName: 'Alexandria Drug Store',        submittedBy: 'Yehia',  submittedAt: 'May 14, 2024', status: 'Under Review' },
+  { id: 'REQ-005', entityType: 'Manufacturer', entityName: 'Upper Egypt Factory',          submittedBy: 'Mossad', submittedAt: 'May 14, 2024', status: 'Rejected'     },
+  { id: 'REQ-006', entityType: 'Warehouse',    entityName: 'Portsaid Distribution Center', submittedBy: 'Nour',   submittedAt: 'May 14, 2024', status: 'Under Review' },
 ];
 
-// ─── Shared badge colors (covers status / severity / batch status / shipment status) ──
+const DEMO_BATCHES = [
+  { id: 'BAT-2024-001', productName: 'Antibiotics',         batchNumber: 'BAT-2024-001', factory: 'Eva Pharma',        batchStatus: 'In Supply Chain', lastUpdate: '2024-05-15' },
+  { id: 'BAT-2024-002', productName: 'Pain Relief',         batchNumber: 'BAT-2024-002', factory: 'Pharco Industries', batchStatus: 'In Supply Chain', lastUpdate: '2024-05-15' },
+  { id: 'BAT-2024-003', productName: 'Diabetes Medication', batchNumber: 'BAT-2024-003', factory: 'CID Pharma',        batchStatus: 'Quarantined',     lastUpdate: '2024-05-15' },
+  { id: 'BAT-2024-004', productName: 'Capsules',            batchNumber: 'BAT-2024-004', factory: 'Memphis Pharma',    batchStatus: 'In Pharmacy',     lastUpdate: '2024-05-15' },
+  { id: 'BAT-2024-005', productName: 'Cough Syrup',         batchNumber: 'BAT-2024-005', factory: 'Amoun Pharma',      batchStatus: 'Recalled',        lastUpdate: '2024-05-15' },
+];
 
+const DEMO_ALERTS = [
+  { id: 'ALR-001', alertType: 'Cold Chain Issue',  severity: 'High',   entityType: 'Warehouse',    date: 'May 16, 2024', status: 'Open'         },
+  { id: 'ALR-002', alertType: 'Duplicate Serial',  severity: 'High',   entityType: 'Pharmacy',     date: 'May 15, 2024', status: 'Open'         },
+  { id: 'ALR-003', alertType: 'License Expiry',    severity: 'Medium', entityType: 'Manufacturer', date: 'May 15, 2024', status: 'Under Review' },
+  { id: 'ALR-004', alertType: 'Quantity Mismatch', severity: 'High',   entityType: 'Warehouse',    date: 'May 14, 2024', status: 'Open'         },
+  { id: 'ALR-005', alertType: 'Suspicious Scan',   severity: 'Medium', entityType: 'Pharmacy',     date: 'May 14, 2024', status: 'Open'         },
+];
+
+// ─── Shared badge colors (unchanged) ──────────────────────────────────────
 const BADGE_COLORS = {
   Pending:          { bg: '#FEF3C7', color: '#B45309' },
   'Under Review':   { bg: '#DBEAFE', color: '#1D4ED8' },
@@ -59,115 +63,29 @@ const Badge = ({ value }) => {
   );
 };
 
-const StatCard = ({ label, value, sub, icon: Icon, iconBg, iconColor, onClick, active }) => {
-  const clickable = typeof onClick === 'function';
-  const Wrapper = clickable ? 'button' : 'div';
-  return (
-    <Wrapper
-      onClick={onClick}
-      style={{
-        background: '#fff',
-        borderRadius: 16,
-        padding: '18px 20px',
-        display: 'flex',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        boxShadow: active ? '0 4px 16px rgba(59,130,246,0.18)' : '0 1px 4px rgba(0,0,0,0.06)',
-        border: active ? '2px solid #3B82F6' : '1px solid #F0F0F0',
-        flex: 1,
-        minWidth: 0,
-        textAlign: 'left',
-        cursor: clickable ? 'pointer' : 'default',
-        transition: 'all 0.15s',
-      }}
-    >
-      <div>
-        <div style={{ fontSize: 12, color: '#6B7280', marginBottom: 8, fontWeight: 500 }}>{label}</div>
-        <div style={{ fontSize: 34, fontWeight: 700, color: '#111827', lineHeight: 1 }}>{value}</div>
-        {sub && <div style={{ fontSize: 11, color: '#9CA3AF', marginTop: 6 }}>{sub}</div>}
-      </div>
-      <div style={{ width: 52, height: 52, borderRadius: 14, background: iconBg, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-        <Icon size={22} color={iconColor} />
-      </div>
-    </Wrapper>
-  );
-};
-
-// ─── Static pill card (label + number + red circular icon) — purely
-// decorative, not clickable, doesn't affect the table below in any way. ──
-const StaticStatCard = ({ label, value, icon: Icon }) => (
+const StaticStatCard = ({ label, value, icon: Icon, loading }) => (
   <div
     style={{
-      background: '#fff',
-      borderRadius: 16,
-      padding: '16px 18px',
-      display: 'flex',
-      justifyContent: 'space-between',
-      alignItems: 'center',
-      boxShadow: '0 1px 4px rgba(0,0,0,0.06)',
-      border: '1px solid #F0F0F0',
-      flex: 1,
-      minWidth: 0,
+      background: '#fff', borderRadius: 16, padding: '16px 18px',
+      display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+      boxShadow: '0 1px 4px rgba(0,0,0,0.06)', border: '1px solid #F0F0F0',
+      flex: 1, minWidth: 0,
     }}
   >
     <div style={{ minWidth: 0 }}>
       <div style={{ fontSize: 13, color: '#6B7280', marginBottom: 6, fontWeight: 500, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{label}</div>
-      <div style={{ fontSize: 26, fontWeight: 700, color: '#111827', lineHeight: 1 }}>{value}</div>
+      <div style={{ fontSize: 26, fontWeight: 700, color: '#111827', lineHeight: 1 }}>{loading ? '—' : value}</div>
     </div>
-    <div
-      style={{
-        width: 40,
-        height: 40,
-        borderRadius: '50%',
-        background: '#FEE2E2',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        flexShrink: 0,
-        marginLeft: 10,
-      }}
-    >
+    <div style={{ width: 40, height: 40, borderRadius: '50%', background: '#FEE2E2', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, marginLeft: 10 }}>
       <Icon size={18} color="#DC2626" />
     </div>
   </div>
 );
 
-// ─── Mock data for the five monitoring areas ───────────────────────────────
-
-const MOCK_REQUESTS = [
-  { id: 'REQ-001', entityType: 'Warehouse',    entityName: 'Delta Medical Storage',        submittedBy: 'Ahmed',  submittedAt: 'May 16, 2024', status: 'Pending'      },
-  { id: 'REQ-002', entityType: 'Manufacturer', entityName: 'Cairo Pharma Factory',         submittedBy: 'Mohamed',submittedAt: 'May 15, 2024', status: 'Under Review' },
-  { id: 'REQ-003', entityType: 'Warehouse',    entityName: 'Alexandria Storage',           submittedBy: 'Saif',   submittedAt: 'May 15, 2024', status: 'Pending'      },
-  { id: 'REQ-004', entityType: 'Pharmacy',     entityName: 'Alexandria Drug Store',        submittedBy: 'Yehia',  submittedAt: 'May 14, 2024', status: 'Under Review' },
-  { id: 'REQ-005', entityType: 'Manufacturer', entityName: 'Upper Egypt Factory',          submittedBy: 'Mossad', submittedAt: 'May 14, 2024', status: 'Rejected'     },
-  { id: 'REQ-006', entityType: 'Warehouse',    entityName: 'Portsaid Distribution Center', submittedBy: 'Nour',   submittedAt: 'May 14, 2024', status: 'Under Review' },
-];
-
-const MOCK_BATCHES = [
-  { id: 'BAT-2024-001', productName: 'Antibiotics',         batchNumber: 'BAT-2024-001', factory: 'Eva Pharma',        batchStatus: 'In Supply Chain', lastUpdate: '2024-05-15' },
-  { id: 'BAT-2024-002', productName: 'Pain Relief',         batchNumber: 'BAT-2024-002', factory: 'Pharco Industries', batchStatus: 'In Supply Chain', lastUpdate: '2024-05-15' },
-  { id: 'BAT-2024-003', productName: 'Diabetes Medication', batchNumber: 'BAT-2024-003', factory: 'CID Pharma',        batchStatus: 'Quarantined',     lastUpdate: '2024-05-15' },
-  { id: 'BAT-2024-004', productName: 'Capsules',            batchNumber: 'BAT-2024-004', factory: 'Memphis Pharma',    batchStatus: 'In Pharmacy',     lastUpdate: '2024-05-15' },
-  { id: 'BAT-2024-005', productName: 'Cough Syrup',         batchNumber: 'BAT-2024-005', factory: 'Amoun Pharma',      batchStatus: 'Recalled',        lastUpdate: '2024-05-15' },
-];
-
-const MOCK_ALERTS = [
-  { id: 'ALR-001', alertType: 'Cold Chain Issue',  severity: 'High',   entityType: 'Warehouse',    date: 'May 16, 2024', status: 'Open'         },
-  { id: 'ALR-002', alertType: 'Duplicate Serial',  severity: 'High',   entityType: 'Pharmacy',     date: 'May 15, 2024', status: 'Open'         },
-  { id: 'ALR-003', alertType: 'License Expiry',    severity: 'Medium', entityType: 'Manufacturer', date: 'May 15, 2024', status: 'Under Review' },
-  { id: 'ALR-004', alertType: 'Quantity Mismatch', severity: 'High',   entityType: 'Warehouse',    date: 'May 14, 2024', status: 'Open'         },
-  { id: 'ALR-005', alertType: 'Suspicious Scan',   severity: 'Medium', entityType: 'Pharmacy',     date: 'May 14, 2024', status: 'Open'         },
-];
-
-// ─── Tab configuration — this drives the cards, the table columns, and filters ─────
-
+// ─── Tab configuration (unchanged) ─────────────────────────────────────────
 const TAB_CONFIG = [
   {
-    key: 'requests',
-    label: 'Request',
-    icon: ClipboardCheck,
-    iconBg: '#EFF6FF',
-    iconColor: '#3B82F6',
+    key: 'requests', label: 'Request', icon: ClipboardCheck, iconBg: '#EFF6FF', iconColor: '#3B82F6',
     tableTitle: 'Recent Registration Requests',
     columns: [
       { key: 'entityType',  label: 'Entity Type' },
@@ -181,11 +99,7 @@ const TAB_CONFIG = [
     actionLabel: 'View Request',
   },
   {
-    key: 'batches',
-    label: 'Batch',
-    icon: Package,
-    iconBg: '#ECFDF5',
-    iconColor: '#059669',
+    key: 'batches', label: 'Batch', icon: Package, iconBg: '#ECFDF5', iconColor: '#059669',
     tableTitle: 'Recent Batch Activity',
     columns: [
       { key: 'productName',  label: 'Product Name' },
@@ -197,11 +111,7 @@ const TAB_CONFIG = [
     filterFields: ['batchStatus', 'factory'],
   },
   {
-    key: 'alerts',
-    label: 'Alert',
-    icon: AlertTriangle,
-    iconBg: '#FEF2F2',
-    iconColor: '#EF4444',
+    key: 'alerts', label: 'Alert', icon: AlertTriangle, iconBg: '#FEF2F2', iconColor: '#EF4444',
     tableTitle: 'Recent Compliance Alerts',
     columns: [
       { key: 'alertType',  label: 'Alert Type' },
@@ -214,14 +124,9 @@ const TAB_CONFIG = [
   },
 ];
 
-const INITIAL_DATA = {
-  requests: MOCK_REQUESTS,
-  batches:  MOCK_BATCHES,
-  alerts:   MOCK_ALERTS,
-};
+const INITIAL_DATA = { requests: [], batches: [], alerts: [] };
 
-// ─── Generic filter dropdown, options are derived from the active tab's data ───
-
+// ─── FilterDropdown (unchanged) ─────────────────────────────────────────────
 const FilterDropdown = ({ tab, data, activeFilters, onApply, onClear }) => {
   const [open, setOpen]   = useState(false);
   const [local, setLocal] = useState(activeFilters);
@@ -296,10 +201,9 @@ const FilterDropdown = ({ tab, data, activeFilters, onApply, onClear }) => {
   );
 };
 
-// ─── Details drawer — generic, driven by the active tab's columns ─────────
-
-const DetailsDrawer = ({ tab, item, onClose }) => {
-  if (!item) return null;
+// ─── DetailsDrawer (unchanged, now also shows a small inline loading row) ──
+const DetailsDrawer = ({ tab, item, loading, onClose }) => {
+  if (!item && !loading) return null;
   return (
     <div style={{ position: 'fixed', inset: 0, zIndex: 9998 }} onClick={onClose}>
       <div onClick={e => e.stopPropagation()} style={{ position: 'fixed', right: 0, top: 0, bottom: 0, width: 380, background: '#fff', boxShadow: '-4px 0 24px rgba(0,0,0,0.12)', padding: 24, overflowY: 'auto' }}>
@@ -309,23 +213,28 @@ const DetailsDrawer = ({ tab, item, onClose }) => {
             <X size={15} />
           </button>
         </div>
-        <div style={{ marginBottom: 18 }}>
-          <div style={{ fontSize: 11, color: '#9CA3AF', textTransform: 'uppercase', fontWeight: 600, marginBottom: 4 }}>ID</div>
-          <div style={{ fontSize: 14, color: '#111827' }}>{item.id}</div>
-        </div>
-        {tab.columns.map(({ key, label, badge }) => item[key] && (
-          <div key={key} style={{ marginBottom: 18 }}>
-            <div style={{ fontSize: 11, color: '#9CA3AF', textTransform: 'uppercase', fontWeight: 600, marginBottom: 6 }}>{label}</div>
-            {badge ? <Badge value={item[key]} /> : <div style={{ fontSize: 14, color: '#111827' }}>{item[key]}</div>}
-          </div>
-        ))}
+        {loading ? (
+          <div style={{ color: '#9CA3AF', fontSize: 13, padding: '20px 0' }}>Loading…</div>
+        ) : (
+          <>
+            <div style={{ marginBottom: 18 }}>
+              <div style={{ fontSize: 11, color: '#9CA3AF', textTransform: 'uppercase', fontWeight: 600, marginBottom: 4 }}>ID</div>
+              <div style={{ fontSize: 14, color: '#111827' }}>{item.id}</div>
+            </div>
+            {tab.columns.map(({ key, label, badge }) => item[key] && (
+              <div key={key} style={{ marginBottom: 18 }}>
+                <div style={{ fontSize: 11, color: '#9CA3AF', textTransform: 'uppercase', fontWeight: 600, marginBottom: 6 }}>{label}</div>
+                {badge ? <Badge value={item[key]} /> : <div style={{ fontSize: 14, color: '#111827' }}>{item[key]}</div>}
+              </div>
+            ))}
+          </>
+        )}
       </div>
     </div>
   );
 };
 
-// ─── Toast ──────────────────────────────────────────────────────────────────
-
+// ─── Toast / ConfirmDialog (unchanged) ─────────────────────────────────────
 const Toast = ({ message, type, onDismiss }) => {
   useEffect(() => {
     const t = setTimeout(onDismiss, 3000);
@@ -337,6 +246,28 @@ const Toast = ({ message, type, onDismiss }) => {
     </div>
   );
 };
+
+const ConfirmDialog = ({ title, message, confirmLabel, cancelLabel, onConfirm, onCancel, danger }) => (
+  <div style={{ position: 'fixed', inset: 0, zIndex: 99998, background: 'rgba(17,24,39,0.45)', display: 'flex', alignItems: 'center', justifyContent: 'center' }} onClick={onCancel}>
+    <div onClick={e => e.stopPropagation()} style={{ background: '#fff', borderRadius: 16, padding: 24, width: 360, boxShadow: '0 12px 32px rgba(0,0,0,0.2)' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14 }}>
+        <div style={{ width: 40, height: 40, borderRadius: '50%', background: danger ? '#FEE2E2' : '#EFF6FF', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+          <AlertTriangle size={18} color={danger ? '#DC2626' : '#3B82F6'} />
+        </div>
+        <div style={{ fontWeight: 700, fontSize: 15, color: '#111827' }}>{title}</div>
+      </div>
+      <div style={{ fontSize: 13, color: '#6B7280', marginBottom: 20, lineHeight: 1.6 }}>{message}</div>
+      <div style={{ display: 'flex', gap: 8 }}>
+        <button onClick={onCancel} style={{ flex: 1, padding: '9px', borderRadius: 8, border: '1px solid #E5E7EB', background: '#fff', fontSize: 13, color: '#374151', cursor: 'pointer', fontWeight: 500 }}>
+          {cancelLabel || 'إلغاء'}
+        </button>
+        <button onClick={onConfirm} style={{ flex: 1, padding: '9px', borderRadius: 8, border: 'none', background: danger ? '#DC2626' : '#004399', color: '#fff', fontSize: 13, cursor: 'pointer', fontWeight: 600 }}>
+          {confirmLabel || 'تأكيد'}
+        </button>
+      </div>
+    </div>
+  </div>
+);
 
 // ─── Main component ─────────────────────────────────────────────────────────
 
@@ -350,63 +281,162 @@ const WarehouseDashboard = () => {
   const [reviewItem, setReviewItem]     = useState(null);
   const [reviewDocuments, setReviewDocuments] = useState([]);
   const [drawerItem, setDrawerItem]     = useState(null);
+  const [drawerLoading, setDrawerLoading] = useState(false);
   const [checkedRows, setCheckedRows]   = useState({});
   const [allChecked, setAllChecked]     = useState(false);
   const [toast, setToast]               = useState(null);
   const [loading, setLoading]           = useState(false);
   const [requestLoading, setRequestLoading] = useState(false);
+  const [batchesLoading, setBatchesLoading] = useState(false);
+  const [alertsLoading, setAlertsLoading]   = useState(false);
   const [requestDetailsLoading, setRequestDetailsLoading] = useState(false);
-  const [pagination, setPagination] = useState({ page: 1, pageSize: 10, totalCount: 0 });
+  const [pagination, setPagination] = useState({
+    requests: { page: 1, pageSize: 10, totalCount: 0 },
+    batches:  { page: 1, pageSize: 10, totalCount: 0 },
+    alerts:   { page: 1, pageSize: 5,  totalCount: 0 },
+  });
   const [isHover, setIsHover]           = useState(false);
+  const [pendingAction, setPendingAction] = useState(null);
+
+  // ── Top stat cards (real counts where an endpoint exists) ──────────────
+  const [statCounts, setStatCounts] = useState({ requests: 0, batches: 0, alerts: 0, auditLogs: 0 });
+  const [statsLoading, setStatsLoading] = useState(true);
+  const SHIPMENTS_STAT_PLACEHOLDER = 11; // No national shipments-count endpoint exists in Swagger — see report Section 1.
 
   const activeTab  = TAB_CONFIG.find(t => t.key === activeTabKey);
   const activeData = allData[activeTabKey];
   const filters     = filtersByTab[activeTabKey];
+  const activePagination = pagination[activeTabKey];
 
   const showToast = (msg, type = 'success') => setToast({ message: msg, type });
   const showError = (msg) => showToast(msg, 'error');
 
+  const setPageFor = (tabKey, updates) =>
+    setPagination(prev => ({ ...prev, [tabKey]: { ...prev[tabKey], ...updates } }));
+
+  // ── Requests tab ─────────────────────────────────────────────────────
   const fetchRegistrationRequests = async () => {
     try {
       setRequestLoading(true);
-      const params = {
-        page: pagination.page,
-        pageSize: pagination.pageSize,
-      };
-
+      const { page, pageSize } = pagination.requests;
+      const params = { page, pageSize };
       if (filtersByTab.requests?.status && filtersByTab.requests.status !== 'All') {
         params.status = filtersByTab.requests.status;
       }
-
       const response = await registrationRequestsApi.getAll(params);
       if (response.success) {
         const data = response.data || {};
-        setAllData((prev) => ({
-          ...prev,
-          requests: Array.isArray(data.items) ? data.items : [],
-        }));
-        setPagination((prev) => ({
-          ...prev,
-          totalCount: data.totalCount ?? prev.totalCount,
-        }));
+        const items = Array.isArray(data.items) ? data.items : [];
+        setAllData(prev => ({ ...prev, requests: items.length ? items : DEMO_REQUESTS }));
+        setPageFor('requests', { totalCount: data.totalCount ?? items.length });
       }
     } catch (err) {
       showError(err.message || 'Failed to load registration requests');
+      setAllData(prev => ({ ...prev, requests: DEMO_REQUESTS }));
     } finally {
       setRequestLoading(false);
     }
   };
 
-  useEffect(() => {
-    if (activeTabKey === 'requests') {
-      fetchRegistrationRequests();
+  // ── Batches tab ──────────────────────────────────────────────────────
+  const fetchBatches = async () => {
+    try {
+      setBatchesLoading(true);
+      const { page, pageSize } = pagination.batches;
+      const params = { page, pageSize };
+      if (filtersByTab.batches?.batchStatus && filtersByTab.batches.batchStatus !== 'All') {
+        params.batchStatus = filtersByTab.batches.batchStatus;
+      }
+      if (filtersByTab.batches?.factory && filtersByTab.batches.factory !== 'All') {
+        params.factory = filtersByTab.batches.factory;
+      }
+      const response = await batchesApi.getAll(params);
+      if (response.success) {
+        const data = response.data || {};
+        const items = Array.isArray(data.items) ? data.items.map(mapBatchRow) : [];
+        setAllData(prev => ({ ...prev, batches: items.length ? items : DEMO_BATCHES }));
+        setPageFor('batches', { totalCount: data.totalCount ?? items.length });
+      }
+    } catch (err) {
+      showError(err.message || 'Failed to load batches');
+      setAllData(prev => ({ ...prev, batches: DEMO_BATCHES }));
+    } finally {
+      setBatchesLoading(false);
     }
-  }, [filtersByTab.requests?.status, pagination.page, activeTabKey]);
+  };
+
+  // ── Alerts tab ───────────────────────────────────────────────────────
+  const fetchAlerts = async () => {
+    try {
+      setAlertsLoading(true);
+      const { page, pageSize } = pagination.alerts;
+      const params = { page, pageSize };
+      // NOTE: /api/alerts only supports `status` and `severity` query params in Swagger —
+      // there is no `entityType` filter param, so entityType filtering is applied
+      // client-side below on the fetched page only.
+      if (filtersByTab.alerts?.severity && filtersByTab.alerts.severity !== 'All') {
+        params.severity = filtersByTab.alerts.severity;
+      }
+      const response = await alertsApi.getAll(params);
+      if (response.success) {
+        const data = response.data || {};
+        const items = Array.isArray(data.items) ? data.items.map(mapAlertRow) : [];
+        setAllData(prev => ({ ...prev, alerts: items.length ? items : DEMO_ALERTS }));
+        setPageFor('alerts', { totalCount: data.totalCount ?? items.length });
+      }
+    } catch (err) {
+      showError(err.message || 'Failed to load alerts');
+      setAllData(prev => ({ ...prev, alerts: DEMO_ALERTS }));
+    } finally {
+      setAlertsLoading(false);
+    }
+  };
+
+  const fetchActiveTabData = async () => {
+    if (activeTabKey === 'requests') return fetchRegistrationRequests();
+    if (activeTabKey === 'batches')  return fetchBatches();
+    if (activeTabKey === 'alerts')   return fetchAlerts();
+  };
+
+  useEffect(() => { fetchActiveTabData(); /* eslint-disable-next-line */ }, [
+    activeTabKey,
+    filtersByTab.requests?.status,
+    filtersByTab.batches?.batchStatus,
+    filtersByTab.batches?.factory,
+    filtersByTab.alerts?.severity,
+    pagination[activeTabKey]?.page,
+  ]);
+
+  // ── Top stat cards: fetch real counts on mount ─────────────────────────
+  useEffect(() => {
+    const loadStats = async () => {
+      try {
+        setStatsLoading(true);
+        const [reqCounts, batchSummary, alertCounts, auditLogs] = await Promise.allSettled([
+          registrationRequestsApi.getCounts(),
+          batchesApi.getSummary(),
+          alertsApi.getCounts(),
+          adminApi.getAuditLogs({ page: 1, pageSize: 1 }),
+        ]);
+
+        setStatCounts({
+          requests: reqCounts.status === 'fulfilled' ? (reqCounts.value?.data?.totalCount ?? reqCounts.value?.data?.total ?? 0) : 0,
+          batches: batchSummary.status === 'fulfilled' ? (batchSummary.value?.data?.totalCount ?? batchSummary.value?.data?.total ?? 0) : 0,
+          alerts: alertCounts.status === 'fulfilled' ? (alertCounts.value?.data?.totalCount ?? alertCounts.value?.data?.open ?? 0) : 0,
+          auditLogs: auditLogs.status === 'fulfilled' ? (auditLogs.value?.data?.totalCount ?? 0) : 0,
+        });
+      } catch (err) {
+        showError('Failed to load summary counts');
+      } finally {
+        setStatsLoading(false);
+      }
+    };
+    loadStats();
+  }, []);
 
   const openRequestDetails = async (row) => {
     setReviewItem(row);
     setReviewDocuments([]);
-
     try {
       setRequestDetailsLoading(true);
       const response = await registrationRequestsApi.getById(row.id);
@@ -430,17 +460,34 @@ const WarehouseDashboard = () => {
     }
   };
 
-  // ── Filtering ──────────────────────────────────────────────────────────
+  // ── Batch / Alert detail drawer — now pulls real detail data ──────────
+  const openDetailsDrawer = async (row) => {
+    setDrawerItem(row); // show cached row immediately
+    setDrawerLoading(true);
+    try {
+      if (activeTabKey === 'batches') {
+        const response = await batchesApi.getById(row.id);
+        if (response.success) setDrawerItem(mapBatchDetails(response.data || {}));
+      } else if (activeTabKey === 'alerts') {
+        const response = await alertsApi.getById(row.id);
+        if (response.success) setDrawerItem(mapAlertDetails(response.data || {}));
+      }
+    } catch (err) {
+      showError(err.message || 'Failed to load details');
+      // keep the cached row already shown
+    } finally {
+      setDrawerLoading(false);
+    }
+  };
+
+  // ── Filtering (client-side pass, e.g. entityType for alerts) ──────────
   const filteredData = activeData.filter(row =>
     activeTab.filterFields.every(f => !filters[f] || filters[f] === 'All' || row[f] === filters[f])
   );
 
-  // ── Reset selection when switching tabs ───────────────────────────────
   useEffect(() => { setCheckedRows({}); setAllChecked(false); }, [activeTabKey]);
 
   const checkedCount = Object.values(checkedRows).filter(Boolean).length;
-
-  // ── Handlers ───────────────────────────────────────────────────────────
 
   const handleExport = () => {
     try {
@@ -458,42 +505,28 @@ const WarehouseDashboard = () => {
   const handleRefresh = () => {
     setLoading(true);
     setTimeout(async () => {
-      if (activeTabKey === 'requests') {
-        await fetchRegistrationRequests();
-      } else {
-        setAllData(prev => ({
-          ...prev,
-          batches: INITIAL_DATA.batches,
-          alerts: INITIAL_DATA.alerts,
-        }));
-      }
+      await fetchActiveTabData();
       setFiltersByTab(Object.fromEntries(TAB_CONFIG.map(t => [t.key, Object.fromEntries(t.filterFields.map(f => [f, 'All']))])));
       setCheckedRows({});
       setAllChecked(false);
       setLoading(false);
       showToast('Data refreshed');
-    }, 800);
+    }, 400);
   };
 
-  const handleReviewAction = async (action, item) => {
+  const performReviewAction = async (action, item) => {
     if (!item?.id) return;
     try {
       setRequestDetailsLoading(true);
       if (action === 'approve') {
         const response = await registrationRequestsApi.approve(item.id);
-        if (response.success) {
-          showToast(`Approved ${item.id}`);
-        }
+        if (response.success) showToast(`Approved ${item.id}`);
       } else if (action === 'reject') {
         const response = await registrationRequestsApi.reject(item.id, { reason: 'Rejected by regulator' });
-        if (response.success) {
-          showToast(`Rejected ${item.id}`, 'error');
-        }
+        if (response.success) showToast(`Rejected ${item.id}`, 'error');
       } else if (action === 'inspection') {
         const response = await registrationRequestsApi.requestMoreDocuments(item.id, { message: 'Please provide additional documents for inspection' });
-        if (response.success) {
-          showToast(`Inspection requested for ${item.id}`);
-        }
+        if (response.success) showToast(`Inspection requested for ${item.id}`);
       }
       await fetchRegistrationRequests();
     } catch (err) {
@@ -504,16 +537,31 @@ const WarehouseDashboard = () => {
     }
   };
 
+  const handleReviewAction = (action, item) => {
+    if (action === 'reject') { setPendingAction({ action, item }); return; }
+    performReviewAction(action, item);
+  };
+
+  const confirmPendingAction = async () => {
+    if (!pendingAction) return;
+    const { action, item } = pendingAction;
+    setPendingAction(null);
+    await performReviewAction(action, item);
+  };
+
+  const cancelPendingAction = () => setPendingAction(null);
+
   const toggleAll = () => {
     if (allChecked) { setCheckedRows({}); setAllChecked(false); }
     else { const all = {}; filteredData.forEach(r => { all[r.id] = true; }); setCheckedRows(all); setAllChecked(true); }
   };
   const toggleRow = (id) => setCheckedRows(p => ({ ...p, [id]: !p[id] }));
 
+  const isTableLoading = activeTabKey === 'requests' ? requestLoading : activeTabKey === 'batches' ? batchesLoading : alertsLoading;
+
   return (
     <div style={{ fontFamily: 'Inter, SF Pro, -apple-system, sans-serif', padding: '28px 32px', boxSizing: 'border-box', background: '#F8F9FB', minHeight: '100vh' }}>
 
-      {/* ── Page header ── */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 28 }}>
         <div>
           <h1 style={{ margin: 0, fontSize: 38, fontWeight: 800, lineHeight: 1.15, letterSpacing: '-0.5px' }}>
@@ -546,19 +594,16 @@ const WarehouseDashboard = () => {
 
       <style>{'@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }'}</style>
 
-      {/* ── 5 stat cards matching the reference design ── */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 16, marginBottom: 28 }}>
-        <StaticStatCard label="Request"  value={allData.requests.length} icon={ClipboardCheck} />
-        <StaticStatCard label="Batch"    value={allData.batches.length}  icon={Package} />
-        <StaticStatCard label="Shipment" value={11}                       icon={Truck} />
-        <StaticStatCard label="Alert"    value={allData.alerts.length}   icon={AlertTriangle} />
-        <StaticStatCard label="AuditLog" value={11}                       icon={History} />
+        <StaticStatCard label="Request"  value={statCounts.requests}  icon={ClipboardCheck} loading={statsLoading} />
+        <StaticStatCard label="Batch"    value={statCounts.batches}   icon={Package}        loading={statsLoading} />
+        <StaticStatCard label="Shipment" value={SHIPMENTS_STAT_PLACEHOLDER} icon={Truck}     loading={false} />
+        <StaticStatCard label="Alert"    value={statCounts.alerts}    icon={AlertTriangle}  loading={statsLoading} />
+        <StaticStatCard label="AuditLog" value={statCounts.auditLogs} icon={History}        loading={statsLoading} />
       </div>
 
-      {/* ── Table card ── */}
       <div style={{ background: '#fff', borderRadius: 16, border: '1px solid #F0F0F0', boxShadow: '0 1px 4px rgba(0,0,0,0.06)', overflow: 'hidden' }}>
 
-        {/* Toolbar — table names sit inline; click any one to switch the table below */}
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '18px 20px 14px', flexWrap: 'wrap', gap: 12 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
             {TAB_CONFIG.map((tab, i) => (
@@ -566,15 +611,7 @@ const WarehouseDashboard = () => {
                 {i > 0 && <span style={{ color: '#D1D5DB', fontSize: 13 }}>|</span>}
                 <button
                   onClick={() => setActiveTabKey(tab.key)}
-                  style={{
-                    border: 'none',
-                    background: 'none',
-                    cursor: 'pointer',
-                    padding: '2px 4px',
-                    fontSize: 15,
-                    fontWeight: tab.key === activeTabKey ? 600 : 400,
-                    color: tab.key === activeTabKey ? '#111827' : '#9CA3AF',
-                  }}
+                  style={{ border: 'none', background: 'none', cursor: 'pointer', padding: '2px 4px', fontSize: 15, fontWeight: tab.key === activeTabKey ? 600 : 400, color: tab.key === activeTabKey ? '#111827' : '#9CA3AF' }}
                 >
                   {tab.tableTitle}
                 </button>
@@ -586,8 +623,8 @@ const WarehouseDashboard = () => {
               tab={activeTab}
               data={activeData}
               activeFilters={filters}
-              onApply={f => setFiltersByTab(p => ({ ...p, [activeTabKey]: f }))}
-              onClear={f => setFiltersByTab(p => ({ ...p, [activeTabKey]: f }))}
+              onApply={f => { setFiltersByTab(p => ({ ...p, [activeTabKey]: f })); setPageFor(activeTabKey, { page: 1 }); }}
+              onClear={f => { setFiltersByTab(p => ({ ...p, [activeTabKey]: f })); setPageFor(activeTabKey, { page: 1 }); }}
             />
             <button onClick={handleExport} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '7px 14px', borderRadius: 8, border: '1px solid #E5E7EB', background: '#fff', fontSize: 13, color: '#374151', cursor: 'pointer', fontWeight: 500 }}>
               <Download size={13} />
@@ -596,7 +633,6 @@ const WarehouseDashboard = () => {
           </div>
         </div>
 
-        {/* Table */}
         <div style={{ overflowX: 'auto' }}>
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
             <thead>
@@ -611,7 +647,9 @@ const WarehouseDashboard = () => {
               </tr>
             </thead>
             <tbody>
-              {filteredData.length === 0 ? (
+              {isTableLoading ? (
+                <tr><td colSpan={activeTab.columns.length + 2} style={{ textAlign: 'center', padding: '40px 0', color: '#9CA3AF' }}>Loading…</td></tr>
+              ) : filteredData.length === 0 ? (
                 <tr><td colSpan={activeTab.columns.length + 2} style={{ textAlign: 'center', padding: '40px 0', color: '#9CA3AF' }}>No records found</td></tr>
               ) : (
                 filteredData.map(row => (
@@ -626,9 +664,9 @@ const WarehouseDashboard = () => {
                     ))}
                     <td style={{ padding: '12px 12px' }}>
                       <button
-                        onClick={() => (activeTab.key === 'requests' ? openRequestDetails(row) : setDrawerItem(row))}
+                        onClick={() => (activeTab.key === 'requests' ? openRequestDetails(row) : openDetailsDrawer(row))}
                         style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '6px 12px', borderRadius: 8, border: '1px solid #BFDBFE', background: '#EFF6FF', fontSize: 12, color: '#1D4ED8', cursor: 'pointer', fontWeight: 600, whiteSpace: 'nowrap' }}>
-                        <Eye size={12} /> {activeTab.actionLabel}
+                        <Eye size={12} /> {activeTab.actionLabel || 'View Request'}
                       </button>
                     </td>
                   </tr>
@@ -638,16 +676,15 @@ const WarehouseDashboard = () => {
           </table>
         </div>
 
-        {/* Pagination */}
         <div style={{ padding: '12px 20px', borderTop: '1px solid #F3F4F6', fontSize: 12, color: '#9CA3AF' }}>
-          Showing {filteredData.length} of {(activeTabKey === 'requests' ? pagination.totalCount : activeData.length)} records
+          Showing {filteredData.length} of {activePagination.totalCount} records
         </div>
       </div>
 
-      {/* ── Details drawer (Batch / Alert) ── */}
-      {drawerItem && <DetailsDrawer tab={activeTab} item={drawerItem} onClose={() => setDrawerItem(null)} />}
+      {activeTabKey !== 'requests' && (
+        <DetailsDrawer tab={activeTab} item={drawerItem} loading={drawerLoading} onClose={() => setDrawerItem(null)} />
+      )}
 
-      {/* ── Review modal (View Request) — imported from ./ReviewModal, shared across pages ── */}
       <ReviewRequestModal
         open={!!reviewItem}
         item={reviewItem}
@@ -667,7 +704,18 @@ const WarehouseDashboard = () => {
         onAction={handleReviewAction}
       />
 
-      {/* ── Toast ── */}
+      {pendingAction?.action === 'reject' && (
+        <ConfirmDialog
+          title="تأكيد الرفض"
+          message={`هل أنت متأكد من رفض الطلب ${pendingAction.item?.id}؟ لا يمكن التراجع عن هذا الإجراء.`}
+          confirmLabel="نعم، رفض"
+          cancelLabel="إلغاء"
+          danger
+          onConfirm={confirmPendingAction}
+          onCancel={cancelPendingAction}
+        />
+      )}
+
       {toast && <Toast message={toast.message} type={toast.type} onDismiss={() => setToast(null)} />}
     </div>
   );
