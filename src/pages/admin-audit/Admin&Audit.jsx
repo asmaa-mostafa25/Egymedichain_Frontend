@@ -68,6 +68,8 @@ const StaticStatCard = ({ label, value, icon: Icon, loading }) => (
 
 // ─── Tab configuration — columns and row actions per tab ──────────────────
 // NOTE: `data` / mock fallback removed — everything now comes from the API.
+// `detailFields`: extra fields shown only in the details drawer (not the table),
+// for data the API already returns but the table doesn't have room for.
 
 const TAB_CONFIG = [
   {
@@ -101,6 +103,13 @@ const TAB_CONFIG = [
       { key: 'ip',         label: 'IP Address' },
       { key: 'result',     label: 'Result', badge: true },
       { key: 'timestamp',  label: 'Timestamp' },
+    ],
+    // FIX: oldValue/newValue are already returned by the API (AuditLogListItemDto)
+    // but were never shown anywhere. Surfacing them in the drawer only, so the
+    // main table doesn't get more crowded.
+    detailFields: [
+      { key: 'oldValue', label: 'Old Value' },
+      { key: 'newValue', label: 'New Value' },
     ],
     filterFields: ['entityType', 'result'],
     rowActions: [
@@ -209,7 +218,7 @@ const RowMenu = ({ actions, onAction }) => {
         <div style={{ position: 'absolute', right: 0, top: 'calc(100% + 4px)', background: '#fff', borderRadius: 10, border: '1px solid #E5E7EB', boxShadow: '0 8px 24px rgba(0,0,0,0.12)', zIndex: 100, minWidth: 180, overflow: 'hidden' }}>
           {actions.map(({ key, label, icon: Icon, color }, i) => (
             <button key={key}
-              onClick={() => { onAction(key); setOpen(false); }}
+              onClick={(e) => { e.stopPropagation(); onAction(key); setOpen(false); }}
               style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%', padding: '9px 14px', border: 'none', borderTop: i > 0 ? '1px solid #F3F4F6' : 'none', background: 'none', fontSize: 13, color, cursor: 'pointer', textAlign: 'left' }}
               onMouseEnter={e => e.currentTarget.style.background = '#F9FAFB'}
               onMouseLeave={e => e.currentTarget.style.background = 'none'}>
@@ -224,8 +233,9 @@ const RowMenu = ({ actions, onAction }) => {
 
 // ─── Details drawer ─────────────────────────────────────────────────────────
 
-const DetailsDrawer = ({ tab, item, onClose }) => {
+const DetailsDrawer = ({ tab, item, loading, onClose }) => {
   if (!item) return null;
+  const extraFields = tab.detailFields || [];
   return (
     <div style={{ position: 'fixed', inset: 0, zIndex: 9998 }} onClick={onClose}>
       <div onClick={e => e.stopPropagation()} style={{ position: 'fixed', right: 0, top: 0, bottom: 0, width: 380, background: '#fff', boxShadow: '-4px 0 24px rgba(0,0,0,0.12)', padding: 24, overflowY: 'auto' }}>
@@ -235,6 +245,14 @@ const DetailsDrawer = ({ tab, item, onClose }) => {
             <X size={15} />
           </button>
         </div>
+
+        {/* FIX: previously drawerLoading was never actually reflected in the UI
+            (a ternary picked the same value on both branches). Now it shows a
+            simple inline loading hint while the full record is being fetched. */}
+        {loading && (
+          <div style={{ fontSize: 13, color: '#9CA3AF', marginBottom: 16 }}>Loading full details…</div>
+        )}
+
         <div style={{ marginBottom: 18 }}>
           <div style={{ fontSize: 11, color: '#9CA3AF', textTransform: 'uppercase', fontWeight: 600, marginBottom: 4 }}>ID</div>
           <div style={{ fontSize: 14, color: '#111827' }}>{item.id}</div>
@@ -243,6 +261,12 @@ const DetailsDrawer = ({ tab, item, onClose }) => {
           <div key={key} style={{ marginBottom: 18 }}>
             <div style={{ fontSize: 11, color: '#9CA3AF', textTransform: 'uppercase', fontWeight: 600, marginBottom: 6 }}>{label}</div>
             {badge ? <Badge value={item[key]} /> : <div style={{ fontSize: 14, color: '#111827' }}>{item[key]}</div>}
+          </div>
+        ))}
+        {extraFields.map(({ key, label }) => item[key] && (
+          <div key={key} style={{ marginBottom: 18 }}>
+            <div style={{ fontSize: 11, color: '#9CA3AF', textTransform: 'uppercase', fontWeight: 600, marginBottom: 6 }}>{label}</div>
+            <div style={{ fontSize: 14, color: '#111827' }}>{item[key]}</div>
           </div>
         ))}
       </div>
@@ -329,20 +353,41 @@ const SystemUsersAuditLogs = () => {
   }, []);
 
   // ── Fetch table data for a given tab ──
+  // FIX: filters (role/status for users, entityType/result for logs) and the
+  // search box are now actually sent to the API as query params — matching
+  // what the endpoints support (see GET /api/admin/users and
+  // GET /api/admin/audit-logs). Previously these were only applied to
+  // whatever single page of rows happened to already be in memory, so
+  // filtering/searching silently missed anything outside the current page.
   const fetchTabData = useCallback(async (tabKey) => {
     setDataLoading(true);
     setLoadError(null);
     try {
       const { page, pageSize } = pagination[tabKey];
+      const tabFilters = filtersByTab[tabKey];
+
       if (tabKey === 'users') {
-        const res = await adminApi.getUsers({ page, pageSize });
+        const params = { page, pageSize };
+        if (search) params.search = search;
+        if (tabFilters.role && tabFilters.role !== 'All') params.role = tabFilters.role;
+        if (tabFilters.status && tabFilters.status !== 'All') params.status = tabFilters.status;
+
+        const res = await adminApi.getUsers(params);
         const payload = res?.data ?? res ?? {};
         const items = payload.items ?? payload.results ?? payload;
         const rows = (Array.isArray(items) ? items : []).map(mapSystemUserRow);
         setAllData(prev => ({ ...prev, users: rows }));
         setPagination(prev => ({ ...prev, users: { ...prev.users, totalCount: payload.totalCount ?? rows.length } }));
       } else {
-        const res = await adminApi.getAuditLogs({ page, pageSize });
+        // NOTE: the audit-logs endpoint has no free-text "search" query param
+        // (only from/to/entityType/result/page/pageSize), so the search box
+        // for this tab still only matches within the currently loaded page —
+        // see the accompanying backend report.
+        const params = { page, pageSize };
+        if (tabFilters.entityType && tabFilters.entityType !== 'All') params.entityType = tabFilters.entityType;
+        if (tabFilters.result && tabFilters.result !== 'All') params.result = tabFilters.result;
+
+        const res = await adminApi.getAuditLogs(params);
         const payload = res?.data ?? res ?? {};
         const items = payload.items ?? payload.results ?? payload;
         const rows = (Array.isArray(items) ? items : []).map(mapAuditLogRow);
@@ -351,18 +396,31 @@ const SystemUsersAuditLogs = () => {
       }
     } catch (err) {
       setLoadError(err?.message || 'Failed to load data');
-      showError('فشل تحميل البيانات، حاول مرة أخرى');
+      showError('Failed to load data, please try again');
     } finally {
       setDataLoading(false);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pagination.users.page, pagination.users.pageSize, pagination.logs.page, pagination.logs.pageSize]);
+  }, [
+    pagination.users.page, pagination.users.pageSize,
+    pagination.logs.page, pagination.logs.pageSize,
+    JSON.stringify(filtersByTab.users), JSON.stringify(filtersByTab.logs),
+    search,
+  ]);
 
   // initial load + summary
   useEffect(() => { fetchSummary(); }, [fetchSummary]);
-  useEffect(() => { fetchTabData(activeTabKey); }, [activeTabKey]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { fetchTabData(activeTabKey); }, [activeTabKey, fetchTabData]);
 
   useEffect(() => { setSearch(''); setCheckedRows({}); setAllChecked(false); }, [activeTabKey]);
+
+  // FIX: whenever filters or the search term change, go back to page 1 —
+  // otherwise a user sitting on page 3 who narrows a filter could land on an
+  // out-of-range page with no results, looking like the filter is broken.
+  useEffect(() => {
+    setPagination(prev => ({ ...prev, [activeTabKey]: { ...prev[activeTabKey], page: 1 } }));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [JSON.stringify(filters), search, activeTabKey]);
 
   const filteredData = activeData
     .filter(row => activeTab.filterFields.every(f => !filters[f] || filters[f] === 'All' || row[f] === filters[f]))
@@ -450,7 +508,9 @@ const SystemUsersAuditLogs = () => {
       fetchSummary(); // stat cards may have changed (active/inactive counts)
       setPendingAction(null);
     } catch (err) {
-      showError(err?.message || 'حدث خطأ أثناء تنفيذ العملية');
+      // FIX: fallback message is now in English to match the rest of the UI
+      // (was previously a hardcoded Arabic string, inconsistent with the page).
+      showError(err?.message || 'An error occurred while performing this action');
     } finally {
       setActionSubmitting(false);
     }
@@ -461,6 +521,15 @@ const SystemUsersAuditLogs = () => {
     deactivate: { title: 'Deactivate User', message: `Deactivate ${pendingAction?.row?.name}? They will lose access until reactivated.`,       confirmLabel: 'Deactivate', confirmColor: '#D97706' },
     revoke:     { title: 'Revoke Sessions', message: `End all active sessions for ${pendingAction?.row?.name} across every device?`,          confirmLabel: 'Revoke',     confirmColor: '#DC2626' },
   };
+
+  // FIX: use the server-reported totalCount (already tracked in `pagination`)
+  // to decide whether a next page actually exists, instead of the previous
+  // heuristic (`activeData.length < pageSize`) which could be wrong once
+  // client-side filtering trims the in-memory page down.
+  const { page: currentPage, pageSize: currentPageSize, totalCount: currentTotalCount } = pagination[activeTabKey];
+  const hasNextPage = currentTotalCount
+    ? currentPage * currentPageSize < currentTotalCount
+    : activeData.length >= currentPageSize;
 
   return (
     <div style={{ fontFamily: 'Inter, SF Pro, -apple-system, sans-serif', padding: '28px 32px', boxSizing: 'border-box', background: '#F8F9FB', minHeight: '100vh' }}>
@@ -606,9 +675,9 @@ const SystemUsersAuditLogs = () => {
             </button>
             <span>Page {pagination[activeTabKey].page}</span>
             <button
-              disabled={dataLoading || activeData.length < pagination[activeTabKey].pageSize}
+              disabled={dataLoading || !hasNextPage}
               onClick={() => setPagination(p => ({ ...p, [activeTabKey]: { ...p[activeTabKey], page: p[activeTabKey].page + 1 } }))}
-              style={{ padding: '5px 10px', borderRadius: 6, border: '1px solid #E5E7EB', background: '#fff', cursor: 'pointer', fontSize: 12 }}
+              style={{ padding: '5px 10px', borderRadius: 6, border: '1px solid #E5E7EB', background: '#fff', cursor: !hasNextPage ? 'not-allowed' : 'pointer', fontSize: 12 }}
             >
               Next
             </button>
@@ -620,7 +689,8 @@ const SystemUsersAuditLogs = () => {
       {drawerItem && (
         <DetailsDrawer
           tab={activeTab}
-          item={drawerLoading ? drawerItem : drawerItem}
+          item={drawerItem}
+          loading={drawerLoading}
           onClose={() => setDrawerItem(null)}
         />
       )}

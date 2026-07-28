@@ -1,5 +1,6 @@
 import { X } from 'lucide-react';
 import { useEffect } from 'react';
+import { createPortal } from 'react-dom';
 
 const Drawer = ({
   isOpen,
@@ -33,14 +34,21 @@ const Drawer = ({
 
   if (!isOpen) return null;
 
-  return (
+  // Rendered via a portal straight into document.body — same reasoning as
+  // Modal.jsx: `position: fixed` (and this drawer's `position: absolute`
+  // inside it) resolves against the nearest transformed ancestor instead of
+  // the viewport if one exists (e.g. a page wrapper using an
+  // `animate-fadeIn` class with a transform). Rendering outside that
+  // wrapper via createPortal guarantees the drawer always covers the full
+  // viewport height regardless of parent animations.
+  return createPortal(
     <div
       style={{
         position: 'fixed',
         inset: 0,
         backgroundColor: 'rgba(0, 0, 0, 0.6)',
         backdropFilter: 'blur(2px)',
-        zIndex: 'var(--z-modal)',
+        zIndex: 'var(--z-modal, 1000)',
       }}
       onClick={() => closeOnOverlay && onClose?.()}
     >
@@ -161,7 +169,8 @@ const Drawer = ({
           }
         `}
       </style>
-    </div>
+    </div>,
+    document.body
   );
 };
 

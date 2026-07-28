@@ -114,6 +114,7 @@ const inputStyle = {
   borderRadius: 'var(--radius-md)',
   color: 'var(--text-primary)',
   fontSize: 'var(--font-size-sm)',
+  boxSizing: 'border-box',
 };
 
 const labelStyle = {
@@ -891,6 +892,7 @@ const Staff = () => {
             style={{
               display: 'flex',
               alignItems: 'center',
+              flexWrap: 'wrap',
               gap: 'var(--spacing-md)',
               padding: 'var(--spacing-md) var(--spacing-lg)',
               backgroundColor: 'var(--bg-secondary)',
@@ -915,19 +917,51 @@ const Staff = () => {
             >
               {newStaff.name?.trim()?.charAt(0)?.toUpperCase() || '?'}
             </div>
-            <div style={{ minWidth: 0, flex: 1 }}>
-              <div style={{ fontSize: 'var(--font-size-md)', fontWeight: 600, color: 'var(--text-primary)' }}>
+            <div style={{ minWidth: 0, flex: '1 1 180px' }}>
+              <div
+                style={{
+                  fontSize: 'var(--font-size-md)',
+                  fontWeight: 600,
+                  color: 'var(--text-primary)',
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                  whiteSpace: 'nowrap',
+                }}
+              >
                 {newStaff.name || 'New staff member'}
               </div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--spacing-xs)', fontSize: 'var(--font-size-xs)', color: getRoleColor(newStaff.role) }}>
-                <Shield size={12} />
-                {newStaff.role?.replace('_', ' ')}
-                {newStaff.department && <span style={{ color: 'var(--text-muted)' }}>· {newStaff.department}</span>}
+              <div
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 'var(--spacing-xs)',
+                  fontSize: 'var(--font-size-xs)',
+                  color: getRoleColor(newStaff.role),
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                  whiteSpace: 'nowrap',
+                }}
+              >
+                <Shield size={12} style={{ flexShrink: 0 }} />
+                <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  {newStaff.role?.replace('_', ' ')}
+                  {newStaff.department && <span style={{ color: 'var(--text-muted)' }}> · {newStaff.department}</span>}
+                </span>
               </div>
             </div>
-            <div style={{ textAlign: 'right', flexShrink: 0 }}>
+            <div style={{ textAlign: 'right', minWidth: 0, maxWidth: '220px', flex: '0 1 auto' }}>
               <div style={{ fontSize: 'var(--font-size-xs)', color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: 2 }}>Login will be</div>
-              <div style={{ fontSize: 'var(--font-size-xs)', color: 'var(--text-primary)', fontWeight: 500 }}>
+              <div
+                style={{
+                  fontSize: 'var(--font-size-xs)',
+                  color: 'var(--text-primary)',
+                  fontWeight: 500,
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                  whiteSpace: 'nowrap',
+                }}
+                title={newStaff.officialEmail || 'name@ministry.gov.eg'}
+              >
                 {newStaff.officialEmail || 'name@ministry.gov.eg'}
               </div>
             </div>

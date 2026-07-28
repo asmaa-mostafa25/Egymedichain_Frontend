@@ -41,10 +41,7 @@ export const staffApi = {
   activate: async (id) => httpClient.post(`/admin/users/${id}/activate`),
   deactivate: async (id) => httpClient.post(`/admin/users/${id}/deactivate`),
 
-  // TODO: Backend endpoint missing in swagger.json — no staff delete route.
-  delete: async () => {
-    throw new Error('Delete user API is not available yet');
-  },
+  delete: async (id) => httpClient.delete(`/admin/users/${id}`),
 
   // TODO: Backend endpoint missing in swagger.json — no staff update route.
   update: async () => {

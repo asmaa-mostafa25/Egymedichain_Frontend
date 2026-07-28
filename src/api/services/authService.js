@@ -1,4 +1,4 @@
-import { httpClient, setTokens, clearSession } from '../httpClient';
+import { httpClient, setTokens, clearSession, getRefreshToken } from '../httpClient';
 import config from '../../config';
 
 export const authService = {
@@ -30,7 +30,15 @@ export const authService = {
     throw new Error('Change password API is not available yet');
   },
 
-  logout() {
+  async logout() {
+    const refreshToken = getRefreshToken();
+    try {
+      if (refreshToken) {
+        await httpClient.post('/auth/logout', { refreshToken });
+      }
+    } catch {
+      // best-effort — still clear the local session even if the server call fails
+    }
     clearSession();
   },
 

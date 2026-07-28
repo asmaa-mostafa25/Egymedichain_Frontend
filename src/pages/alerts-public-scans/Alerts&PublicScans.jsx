@@ -234,7 +234,7 @@ const RowMenu = ({ actions, onAction }) => {
         <div style={{ position: 'absolute', right: 0, top: 'calc(100% + 4px)', background: '#fff', borderRadius: 10, border: '1px solid #E5E7EB', boxShadow: '0 8px 24px rgba(0,0,0,0.12)', zIndex: 100, minWidth: 180, overflow: 'hidden' }}>
           {actions.map(({ key, label, icon: Icon, color }, i) => (
             <button key={key}
-              onClick={() => { onAction(key); setOpen(false); }}
+              onClick={(e) => { e.stopPropagation(); onAction(key); setOpen(false); }}
               style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%', padding: '9px 14px', border: 'none', borderTop: i > 0 ? '1px solid #F3F4F6' : 'none', background: 'none', fontSize: 13, color, cursor: 'pointer', textAlign: 'left' }}
               onMouseEnter={e => e.currentTarget.style.background = '#F9FAFB'}
               onMouseLeave={e => e.currentTarget.style.background = 'none'}>
@@ -334,24 +334,46 @@ const AlertsPublicScans = () => {
   const showError = (msg) => showToast(msg, 'error');
 
   // ── Fetchers ──
+  // FIX: both fetchers now wrapped in try/catch so a network/API failure surfaces
+  // a toast instead of leaving the page stuck on "Loading…" / "—" forever.
   const fetchCounts = useCallback(async () => {
     setCountsLoading(true);
-    const res = await fetchAlertsCounts();
-    setCounts(res);
-    setCountsLoading(false);
+    try {
+      const res = await fetchAlertsCounts();
+      setCounts(res || {});
+    } catch (err) {
+      showError(err?.message || 'Failed to load alert counts');
+      setCounts({});
+    } finally {
+      setCountsLoading(false);
+    }
   }, []);
 
   const fetchData = useCallback(async () => {
     setLoading(true);
-    const res = await fetchAllAlertsData();
-    setAllData({ openAlerts: res.openAlerts, scanLogs: res.scanLogs, recallAlerts: res.recallAlerts });
-    setDemoMode(!!res.demoMode);
-    setLoading(false);
+    try {
+      const res = await fetchAllAlertsData();
+      setAllData({
+        openAlerts: res?.openAlerts || [],
+        scanLogs: res?.scanLogs || [],
+        recallAlerts: res?.recallAlerts || [],
+      });
+      setDemoMode(!!res?.demoMode);
+    } catch (err) {
+      showError(err?.message || 'Failed to load alerts data');
+    } finally {
+      setLoading(false);
+    }
   }, []);
 
   useEffect(() => { fetchCounts(); fetchData(); }, [fetchCounts, fetchData]);
 
   useEffect(() => { setSearch(''); setCheckedRows({}); setAllChecked(false); }, [activeTabKey]);
+
+  // FIX: selections are now also cleared whenever the active filters change,
+  // so a stale "select all" checkbox can't stay checked against rows that are
+  // no longer part of the filtered view.
+  useEffect(() => { setCheckedRows({}); setAllChecked(false); }, [JSON.stringify(filters)]);
 
   const filteredData = activeData
     .filter(row => activeTab.filterFields.every(f => !filters[f] || filters[f] === 'All' || row[f] === filters[f]))
@@ -419,7 +441,9 @@ const AlertsPublicScans = () => {
       fetchCounts();
       setPendingAction(null);
     } catch (err) {
-      showError(err?.message || 'حدث خطأ أثناء تنفيذ العملية');
+      // FIX: fallback message is now in English to match the rest of the UI
+      // (was previously a hardcoded Arabic string, inconsistent with the page).
+      showError(err?.message || 'An error occurred while performing this action');
     } finally {
       setActionSubmitting(false);
     }

@@ -1,4 +1,3 @@
-
 import config from '../config';
 
 function getToken() {
@@ -61,10 +60,11 @@ async function request(endpoint, options = {}, retry = true) {
 
   let response;
   try {
+    const isFormData = options.body instanceof FormData;
     response = await fetch(`${config.API_BASE_URL}${endpoint}`, {
       ...options,
       headers: {
-        'Content-Type': 'application/json',
+        ...(isFormData ? {} : { 'Content-Type': 'application/json' }),
         ...(token ? { Authorization: `Bearer ${token}` } : {}),
         ...options.headers,
       },
@@ -121,4 +121,3 @@ export const httpClient = {
 };
 
 export { getToken, getRefreshToken, setTokens, clearSession };
-

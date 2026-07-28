@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useState, useEffect } from 'react';
 import { Eye, Download, X, Check, FileText } from 'lucide-react';
 
 const ReviewRequestModal = ({
@@ -13,12 +13,21 @@ const ReviewRequestModal = ({
   documents = [],
 }) => {
   const [activeSection, setActiveSection] = useState('Request Information');
+  const [mode, setMode] = useState(null); // null | 'reject' | 'inspection'
+  const [reasonText, setReasonText] = useState('');
+  const [submitting, setSubmitting] = useState(false);
 
   const docCount = documents?.length || 0;
 
   const normalizedFields = useMemo(() => {
     return Array.isArray(requestFields) ? requestFields : [];
   }, [requestFields]);
+
+  useEffect(() => {
+    setMode(null);
+    setReasonText('');
+    setSubmitting(false);
+  }, [item, open]);
 
   if (!open) return null;
 
@@ -164,16 +173,63 @@ const ReviewRequestModal = ({
           )}
         </div>
 
+        {mode && (
+          <div style={{ padding: '0 20px 16px' }}>
+            <label style={{ fontSize: 12, fontWeight: 600, color: '#374151', display: 'block', marginBottom: 6 }}>
+              {mode === 'reject' ? 'Rejection reason' : 'Notes for additional documents'}
+            </label>
+            <textarea
+              value={reasonText}
+              onChange={(e) => setReasonText(e.target.value)}
+              rows={3}
+              placeholder={mode === 'reject' ? 'Enter the reason for rejection...' : 'Describe the documents needed...'}
+              style={{ width: '100%', padding: '10px 12px', borderRadius: 10, border: '1px solid #E5E7EB', fontSize: 13, resize: 'vertical', boxSizing: 'border-box', fontFamily: 'inherit' }}
+            />
+          </div>
+        )}
+
         <div style={{ display: 'flex', gap: 8, padding: '14px 20px', borderTop: '1px solid #F0F0F0' }}>
-          <button onClick={() => onAction?.('reject', item)} style={{ flex: 1, padding: '10px', borderRadius: 10, border: 'none', background: '#EF4444', color: '#fff', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
-            Reject
-          </button>
-          <button onClick={() => onAction?.('approve', item)} style={{ flex: 1, padding: '10px', borderRadius: 10, border: 'none', background: '#1D4ED8', color: '#fff', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
-            Approve
-          </button>
-          <button onClick={() => onAction?.('inspection', item)} style={{ flex: 1, padding: '10px', borderRadius: 10, border: 'none', background: '#F59E0B', color: '#fff', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
-            Request Inspection
-          </button>
+          {mode ? (
+            <>
+              <button
+                disabled={submitting}
+                onClick={() => { setMode(null); setReasonText(''); }}
+                style={{ flex: 1, padding: '10px', borderRadius: 10, border: '1px solid #E5E7EB', background: '#fff', color: '#374151', fontSize: 13, fontWeight: 600, cursor: submitting ? 'not-allowed' : 'pointer', opacity: submitting ? 0.6 : 1 }}
+              >
+                Cancel
+              </button>
+              <button
+                disabled={submitting}
+                onClick={async () => {
+                  if (!reasonText.trim()) {
+                    showError?.(mode === 'reject' ? 'Rejection reason is required' : 'Notes are required');
+                    return;
+                  }
+                  setSubmitting(true);
+                  try {
+                    await onAction?.(mode, item, reasonText.trim());
+                  } finally {
+                    setSubmitting(false);
+                  }
+                }}
+                style={{ flex: 1, padding: '10px', borderRadius: 10, border: 'none', background: mode === 'reject' ? '#EF4444' : '#F59E0B', color: '#fff', fontSize: 13, fontWeight: 600, cursor: submitting ? 'not-allowed' : 'pointer', opacity: submitting ? 0.6 : 1 }}
+              >
+                Confirm
+              </button>
+            </>
+          ) : (
+            <>
+              <button onClick={() => setMode('reject')} style={{ flex: 1, padding: '10px', borderRadius: 10, border: 'none', background: '#EF4444', color: '#fff', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
+                Reject
+              </button>
+              <button onClick={() => onAction?.('approve', item)} style={{ flex: 1, padding: '10px', borderRadius: 10, border: 'none', background: '#1D4ED8', color: '#fff', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
+                Approve
+              </button>
+              <button onClick={() => setMode('inspection')} style={{ flex: 1, padding: '10px', borderRadius: 10, border: 'none', background: '#F59E0B', color: '#fff', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
+                Request Inspection
+              </button>
+            </>
+          )}
         </div>
       </div>
     </div>

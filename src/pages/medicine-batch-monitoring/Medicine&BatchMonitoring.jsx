@@ -73,9 +73,9 @@ const FILTER_OPTIONS = {
 const PAGE_SIZE = 10;
 
 // ─── Mapping helpers (API DTO → UI row shape) ─────────────────────────────────
-// الـ API (BatchListItemDto) مفيهوش كل الحقول اللي كانت موجودة في الـ mock data
-// (زي manufacturer, requiresColdChain, productStatus, createdBy...) لأنها موجودة
-// بس في تفاصيل الباتش (BatchDetailsDto). فبنعمل fallback بسيط هنا.
+// الـ API (BatchListItemDto) مفيهوش حقل "manufacturer" منفصل عن "factoryName" —
+// اتشالت عمود "Manufacturer" المكرر من الجدول لحد ما الباك يضيف حقل مختلف فعليًا
+// (شوف تقرير النواقص). لو محتاجينه تاني رجّع الحقل مع تعليق واضح.
 
 const mapListItem = (dto) => ({
   id: dto.id,
@@ -83,7 +83,6 @@ const mapListItem = (dto) => ({
   gtin: dto.gtin,
   dosageForm: dto.dosageForm,
   strength: dto.strength,
-  manufacturer: dto.factoryName, // مفيش حقل manufacturer منفصل في الـ list DTO
   factoryName: dto.factoryName,
   quantity: dto.quantity ?? 0,
   batchLotNo: dto.batchNumber,
@@ -272,7 +271,10 @@ const FilterDropdown = ({ activeFilters, onApply, onClear }) => {
               </div>
             </div>
           ))}
-          {/* dosageForm مش مدعوم كـ query param في /api/batches — بيتفلتر client-side على الصفحة الحالية بس */}
+          {/* ⚠️ dosageForm مش مدعوم كـ query param في /api/batches — بيتفلتر client-side
+              على الصفحة الحالية (10 صفوف) بس، يعني ممكن يبان "مفيش نتائج" غلط لو المنتج
+              اللي بحقيقته موجود مش في نفس الصفحة الحالية. لازم الباك يضيف dosageForm
+              كـ query param حقيقي (شوف تقرير النواقص). */}
           <div style={{ display: 'flex', gap: 8, marginTop: 16 }}>
             <button onClick={() => setOpen(false)} style={{ flex: 1, padding: '8px', borderRadius: 8, border: '1px solid #E5E7EB', background: '#fff', fontSize: 13, color: '#374151', cursor: 'pointer', fontWeight: 500 }}>Cancel</button>
             <button onClick={handleApply} style={{ flex: 1, padding: '8px', borderRadius: 8, border: 'none', background: '#004399', color: '#fff', fontSize: 13, cursor: 'pointer', fontWeight: 600, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5 }}>
@@ -535,7 +537,7 @@ const BatchDetailsModal = ({ batchId, onClose }) => {
                       <InfoField label="Factory Name" value={details.factoryName} />
                       <InfoField label="Quantity" value={details.quantity?.toLocaleString()} />
                       <InfoField label="Manufacturing Date" value={details.productionDate} />
-                      {/* <InfoField label="Expiry Date" value={details.expiryDate} /> */}
+                      <InfoField label="Expiry Date" value={details.expiryDate} />
                       <InfoField label="Batch Status" value={details.batchStatus ? <BatchStatusBadge status={details.batchStatus} /> : '—'} />
                       <InfoField label="Supply Chain Stage" value={details.supplyChainStage ? <StageBadge status={details.supplyChainStage} /> : '—'} />
                       <InfoField label="Created By" value={details.createdBy} />
@@ -649,17 +651,16 @@ const Toast = ({ message, type, onDismiss }) => {
 };
 
 // ─── Main Component ───────────────────────────────────────────────────────────
+// ⚠️ عمود "Manufacturer" اتشال لأنه كان مكرر 100% مع "Factory Name" (الـ API مفيهوش
+// حقل manufacturer منفصل). لو الباك ضاف حقل حقيقي للمُصنّع رجّع العمود.
 
 const TABLE_COLUMNS = [
   { key: 'id',               label: 'Batch ID' },
   { key: 'productName',      label: 'Product Name' },
   { key: 'dosageForm',       label: 'Dosage Form' },
-  { key: 'manufacturer',     label: 'Manufacturer' },
   { key: 'factoryName',      label: 'Factory Name' },
   { key: 'quantity',         label: 'Quantity' },
   { key: 'batchLotNo',       label: 'Batch/Lot No.' },
-  // { key: 'productionDate',   label: 'Production Date' },
-  // { key: 'expiryDate',       label: 'Expiry Date' },
   { key: 'supplyChainStage', label: 'Supply Chain Stage' },
   { key: 'batchStatus',      label: 'Batch Status' },
   { key: 'currentLocation',  label: 'Current Location' },
@@ -746,7 +747,7 @@ const MedicineBatchDashboard = () => {
 
   useEffect(() => { fetchSummary(); }, [fetchSummary]);
 
-  // ── Client-side dosageForm filter (not supported by the API) ───────────────
+  // ── Client-side dosageForm filter (not supported by the API — current page only) ──
   const filtered = useMemo(() => {
     if (activeFilters.dosageForm === 'All') return items;
     return items.filter(row => row.dosageForm === activeFilters.dosageForm);
@@ -915,12 +916,9 @@ const MedicineBatchDashboard = () => {
                     <td style={{ padding: '12px 10px', color: '#1D4ED8', fontWeight: 500, whiteSpace: 'nowrap' }}>{row.id}</td>
                     <td style={{ padding: '12px 10px', color: '#374151', whiteSpace: 'nowrap' }}>{row.productName}</td>
                     <td style={{ padding: '12px 10px', color: '#374151' }}>{row.dosageForm}</td>
-                    <td style={{ padding: '12px 10px', color: '#374151', whiteSpace: 'nowrap' }}>{row.manufacturer}</td>
                     <td style={{ padding: '12px 10px', color: '#374151', whiteSpace: 'nowrap' }}>{row.factoryName}</td>
                     <td style={{ padding: '12px 10px', color: '#374151' }}>{Number(row.quantity).toLocaleString()}</td>
                     <td style={{ padding: '12px 10px', color: '#374151', whiteSpace: 'nowrap' }}>{row.batchLotNo}</td>
-                    <td style={{ padding: '12px 10px', color: '#374151', whiteSpace: 'nowrap' }}>{row.productionDate}</td>
-                    <td style={{ padding: '12px 10px', color: '#374151', whiteSpace: 'nowrap' }}>{row.expiryDate}</td>
                     <td style={{ padding: '12px 10px' }}><StageBadge status={row.supplyChainStage} /></td>
                     <td style={{ padding: '12px 10px' }}><BatchStatusBadge status={row.batchStatus} /></td>
                     <td style={{ padding: '12px 10px', color: '#374151', whiteSpace: 'nowrap' }}>{row.currentLocation}</td>

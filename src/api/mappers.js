@@ -1,4 +1,4 @@
-import { formatDisplayDate, formatDisplayDateTime } from './Utils';
+import { formatDisplayDate, formatDisplayDateTime } from './utils';
 
 export function mapAlertRow(item) {
   return {
@@ -74,9 +74,9 @@ export function mapRegistrationRequestRow(item) {
     id: item.id,
     entityType: item.entityType,
     entityName: item.entityName,
-    submittedBy: item.submittedBy,
+    submittedBy: item.representativeName,
     submittedAt: formatDisplayDate(item.submittedAt),
-    status: item.status,
+    status: item.registrationStatus,
   };
 }
 
@@ -131,7 +131,7 @@ export function mapAuditLogRow(item) {
     entityType: item.resourceType,
     entityName: item.resourceId,
     ip: item.ipAddress,
-    result: 'Success',
+    result: item.result || 'Unknown',
     timestamp: formatDisplayDateTime(item.createdAt),
   };
 }

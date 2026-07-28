@@ -4,6 +4,7 @@ import {
   Download, Eye, MoreVertical, X, Check, ChevronDown, Search,
   Factory, Warehouse, Store, Package, Boxes, Truck,
   Pause, RotateCcw, XCircle, ClipboardCheck, ChevronLeft, ChevronRight, Loader2,
+  AlertTriangle,
 } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import ReviewRequestModal from './ReviewRequestModal';
@@ -141,7 +142,7 @@ const TAB_CONFIG = [
       { key: 'city', label: 'City' },
       // { key: 'licenseExpiryDate', label: 'License Expiry Date' },
       { key: 'hasColdStorage', label: 'Has Cold Storage', bool: true },
-      { key: 'factoryStatus', label: 'Factory Status', badge: true },
+      { key: 'factoryStatus', label: 'Warehouse Status', badge: true },
       { key: 'createdAt', label: 'Created At' },
     ],
     secondaryActions: [
@@ -186,7 +187,7 @@ const TAB_CONFIG = [
       { key: 'defaultWarehouse', label: 'Default Warehouse' },
       // { key: 'licenseExpiryDate', label: 'License Expiry Date' },
       { key: 'hasColdStorage', label: 'Has Cold Storage', bool: true },
-      { key: 'factoryStatus', label: 'Factory Status', badge: true },
+      { key: 'factoryStatus', label: 'Pharmacy Status', badge: true },
       { key: 'createdAt', label: 'Created At' },
     ],
     secondaryActions: [
@@ -388,6 +389,47 @@ const Toast = ({ message, type, onDismiss }) => {
   );
 };
 
+// ─── Status change confirmation dialog (with optional reason) ──────────
+
+const StatusConfirmDialog = ({ row, actionKey, nameField, reason, onReasonChange, submitting, onConfirm, onCancel }) => {
+  const verb = STATUS_ACTION_VERB[actionKey];
+  const label = STATUS_ACTION_LABELS[actionKey];
+  const color = STATUS_ACTION_COLORS[actionKey];
+  return (
+    <div style={{ position: 'fixed', inset: 0, zIndex: 99998, background: 'rgba(17,24,39,0.45)', display: 'flex', alignItems: 'center', justifyContent: 'center' }} onClick={onCancel}>
+      <div onClick={e => e.stopPropagation()} style={{ background: '#fff', borderRadius: 16, padding: 24, width: 380, boxShadow: '0 12px 32px rgba(0,0,0,0.2)' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14 }}>
+          <div style={{ width: 40, height: 40, borderRadius: '50%', background: '#FEF3C7', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+            <AlertTriangle size={18} color={color} />
+          </div>
+          <div style={{ fontWeight: 700, fontSize: 15, color: '#111827' }}>{label} confirmation</div>
+        </div>
+        <div style={{ fontSize: 13, color: '#6B7280', marginBottom: 14, lineHeight: 1.6 }}>
+          Are you sure you want to mark <strong>{row?.[nameField]}</strong> as {verb}?
+        </div>
+        <label style={{ fontSize: 12, fontWeight: 600, color: '#374151', display: 'block', marginBottom: 6 }}>
+          Reason (optional)
+        </label>
+        <textarea
+          value={reason}
+          onChange={(e) => onReasonChange(e.target.value)}
+          rows={3}
+          placeholder="Enter a reason for this action..."
+          style={{ width: '100%', padding: '10px 12px', borderRadius: 10, border: '1px solid #E5E7EB', fontSize: 13, resize: 'vertical', boxSizing: 'border-box', fontFamily: 'inherit', marginBottom: 18 }}
+        />
+        <div style={{ display: 'flex', gap: 8 }}>
+          <button disabled={submitting} onClick={onCancel} style={{ flex: 1, padding: '9px', borderRadius: 8, border: '1px solid #E5E7EB', background: '#fff', fontSize: 13, color: '#374151', cursor: submitting ? 'not-allowed' : 'pointer', fontWeight: 500, opacity: submitting ? 0.6 : 1 }}>
+            Cancel
+          </button>
+          <button disabled={submitting} onClick={onConfirm} style={{ flex: 1, padding: '9px', borderRadius: 8, border: 'none', background: color, color: '#fff', fontSize: 13, cursor: submitting ? 'not-allowed' : 'pointer', fontWeight: 600, opacity: submitting ? 0.6 : 1 }}>
+            Confirm
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 // ─── Review-request field/document builders (RegistrationRequestDetailsDto → modal props) ──
 
 const buildRequestFields = (details) => {
@@ -445,6 +487,9 @@ const EntitiesManagement = () => {
   const [checkedRows, setCheckedRows]   = useState({});
   const [allChecked, setAllChecked]     = useState(false);
   const [actionLoadingId, setActionLoadingId] = useState(null);
+  const [statusConfirm, setStatusConfirm] = useState(null); // { row, actionKey }
+  const [statusReason, setStatusReason] = useState('');
+  const [statusSubmitting, setStatusSubmitting] = useState(false);
 
   const [statCards, setStatCards] = useState({
     factories:  { active: null, total: null },
@@ -596,17 +641,33 @@ const EntitiesManagement = () => {
     }
   };
 
-  const handleStatusChange = async (row, actionKey) => {
+  const handleStatusChange = (row, actionKey) => {
+    setStatusReason('');
+    setStatusConfirm({ row, actionKey });
+  };
+
+  const confirmStatusChange = async () => {
+    if (!statusConfirm) return;
+    const { row, actionKey } = statusConfirm;
+    setStatusSubmitting(true);
     setActionLoadingId(row.id);
     try {
-      await api.service[actionKey](row.id);
+      await api.service[actionKey](row.id, statusReason.trim() || undefined);
       showToast(`${row[activeTab.nameField]} ${STATUS_ACTION_VERB[actionKey]} successfully`);
       fetchList();
     } catch (err) {
       showError(err.message || 'Action failed');
     } finally {
       setActionLoadingId(null);
+      setStatusSubmitting(false);
+      setStatusConfirm(null);
+      setStatusReason('');
     }
+  };
+
+  const cancelStatusChange = () => {
+    setStatusConfirm(null);
+    setStatusReason('');
   };
 
   // "Review Request" — the Swagger has no endpoint that returns the
@@ -809,6 +870,19 @@ const EntitiesManagement = () => {
           headerTitle={`${reviewItem.tab.singular} Registration Request`}
           requestFields={buildRequestFields(reviewItem.details)}
           documents={buildDocuments(reviewItem.details)}
+        />
+      )}
+
+      {statusConfirm && (
+        <StatusConfirmDialog
+          row={statusConfirm.row}
+          actionKey={statusConfirm.actionKey}
+          nameField={activeTab.nameField}
+          reason={statusReason}
+          onReasonChange={setStatusReason}
+          submitting={statusSubmitting}
+          onConfirm={confirmStatusChange}
+          onCancel={cancelStatusChange}
         />
       )}
 

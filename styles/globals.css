@@ -39,6 +39,64 @@
   --sidebar-accent-foreground: #E1E7EF;
   --sidebar-border: rgba(255, 255, 255, 0.08);
   --sidebar-ring: #004399;
+
+  /* ────────────────────────────────────────────────────────────────
+     Legacy / component-facing design tokens.
+     A large chunk of the app's components (Staff, Modal, Drawer,
+     Button, DataTable, StatusBadge, Skeleton, etc.) are written
+     against this naming convention rather than the shadcn tokens
+     above. These were missing entirely, which caused every modal /
+     form in the app to render with no spacing, no colors, and no
+     radii (everything silently fell back to `unset`/`0`).
+     Mapped onto the existing shadcn palette so both systems stay
+     visually consistent.
+     ──────────────────────────────────────────────────────────────── */
+
+  /* Spacing scale */
+  --spacing-xs: 4px;
+  --spacing-sm: 8px;
+  --spacing-md: 16px;
+  --spacing-lg: 24px;
+  --spacing-xl: 32px;
+  --spacing-2xl: 48px;
+
+  /* Font sizes */
+  --font-size-xs: 12px;
+  --font-size-sm: 13px;
+  --font-size-md: 14px;
+  --font-size-lg: 16px;
+  --font-size-xl: 20px;
+  --font-size-2xl: 28px;
+
+  /* Radii — --radius-sm/md/lg/xl are already generated further down by
+     the @theme inline block (calc() off --radius), so we only need to
+     add the one token that's missing from the shadcn set. */
+  --radius-full: 9999px;
+
+  /* Surfaces / text, mapped to shadcn tokens */
+  --bg-primary: var(--background);
+  --bg-secondary: var(--muted);
+  --bg-card: var(--card);
+  --bg-input: var(--input);
+
+  --text-primary: var(--foreground);
+  --text-secondary: var(--secondary-foreground);
+  --text-muted: var(--muted-foreground);
+
+  --border-primary: var(--border);
+
+  /* Accents */
+  --accent-primary: var(--primary);
+  --accent-secondary: var(--secondary);
+  --accent-success: #16A34A;
+  --accent-warning: #D97706;
+  --accent-danger: #DC2626;
+  --accent-info: #2563EB;
+
+  /* Misc */
+  --shadow-xl: 0 20px 40px -8px rgba(0, 0, 0, 0.25), 0 8px 16px -4px rgba(0, 0, 0, 0.15);
+  --transition-fast: 120ms ease;
+  --z-modal: 1000;
 }
 
 .dark {
@@ -76,6 +134,14 @@
   --sidebar-accent-foreground: #E1E7EF;
   --sidebar-border: rgba(255, 255, 255, 0.08);
   --sidebar-ring: #65758B;
+
+  /* Legacy tokens re-mapped for dark mode (spacing/radius/etc are
+     identical across themes, only surfaces/text change) */
+  --accent-success: #22C55E;
+  --accent-warning: #F59E0B;
+  --accent-danger: #EF4444;
+  --accent-info: #3B82F6;
+  --shadow-xl: 0 20px 40px -8px rgba(0, 0, 0, 0.6), 0 8px 16px -4px rgba(0, 0, 0, 0.4);
 }
 
 @theme inline {

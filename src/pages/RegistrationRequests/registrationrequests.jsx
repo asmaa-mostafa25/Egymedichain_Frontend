@@ -5,7 +5,7 @@ import {
 } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import { registrationRequestsApi, batchesApi, alertsApi, adminApi } from '../../api/services';
-import { mapBatchRow, mapAlertRow, mapBatchDetails, mapAlertDetails } from '../../api/mappers';
+import { mapBatchRow, mapAlertRow, mapBatchDetails, mapAlertDetails, mapRegistrationRequestRow } from '../../api/mappers';
 import ReviewRequestModal from "./ReviewRequestModal";
 
 // ─── Demo fallback data — used ONLY if the API errors or returns an empty list ──
@@ -95,8 +95,6 @@ const TAB_CONFIG = [
       { key: 'status',      label: 'Status', badge: true },
     ],
     filterFields: ['entityType', 'status'],
-    showViewRequest: true,
-    actionLabel: 'View Request',
   },
   {
     key: 'batches', label: 'Batch', icon: Package, iconBg: '#ECFDF5', iconColor: '#059669',
@@ -326,7 +324,7 @@ const WarehouseDashboard = () => {
       const response = await registrationRequestsApi.getAll(params);
       if (response.success) {
         const data = response.data || {};
-        const items = Array.isArray(data.items) ? data.items : [];
+        const items = Array.isArray(data.items) ? data.items.map(mapRegistrationRequestRow) : [];
         setAllData(prev => ({ ...prev, requests: items.length ? items : DEMO_REQUESTS }));
         setPageFor('requests', { totalCount: data.totalCount ?? items.length });
       }
@@ -442,7 +440,17 @@ const WarehouseDashboard = () => {
       const response = await registrationRequestsApi.getById(row.id);
       if (response.success) {
         const details = response.data || {};
-        setReviewItem(details);
+        const entityName =
+          details.entity?.officialFactoryName ||
+          details.entity?.officialWarehouseName ||
+          details.entity?.officialPharmacyName ||
+          '—';
+        setReviewItem({
+          ...details,
+          entityName,
+          submittedBy: details.account?.fullName,
+          status: details.registrationStatus,
+        });
         const documents = Array.isArray(details.documents) ? details.documents.map((doc) => ({
           id: doc.id,
           name: doc.fileName || doc.documentType || 'Document',
@@ -514,7 +522,7 @@ const WarehouseDashboard = () => {
     }, 400);
   };
 
-  const performReviewAction = async (action, item) => {
+  const performReviewAction = async (action, item, reasonOrNotes) => {
     if (!item?.id) return;
     try {
       setRequestDetailsLoading(true);
@@ -522,10 +530,10 @@ const WarehouseDashboard = () => {
         const response = await registrationRequestsApi.approve(item.id);
         if (response.success) showToast(`Approved ${item.id}`);
       } else if (action === 'reject') {
-        const response = await registrationRequestsApi.reject(item.id, { reason: 'Rejected by regulator' });
+        const response = await registrationRequestsApi.reject(item.id, reasonOrNotes || 'Rejected by regulator');
         if (response.success) showToast(`Rejected ${item.id}`, 'error');
       } else if (action === 'inspection') {
-        const response = await registrationRequestsApi.requestMoreDocuments(item.id, { message: 'Please provide additional documents for inspection' });
+        const response = await registrationRequestsApi.requestMoreDocuments(item.id, reasonOrNotes || 'Please provide additional documents for inspection');
         if (response.success) showToast(`Inspection requested for ${item.id}`);
       }
       await fetchRegistrationRequests();
@@ -537,16 +545,16 @@ const WarehouseDashboard = () => {
     }
   };
 
-  const handleReviewAction = (action, item) => {
-    if (action === 'reject') { setPendingAction({ action, item }); return; }
-    performReviewAction(action, item);
+  const handleReviewAction = (action, item, reasonOrNotes) => {
+    if (action === 'reject') { setPendingAction({ action, item, reasonOrNotes }); return; }
+    performReviewAction(action, item, reasonOrNotes);
   };
 
   const confirmPendingAction = async () => {
     if (!pendingAction) return;
-    const { action, item } = pendingAction;
+    const { action, item, reasonOrNotes } = pendingAction;
     setPendingAction(null);
-    await performReviewAction(action, item);
+    await performReviewAction(action, item, reasonOrNotes);
   };
 
   const cancelPendingAction = () => setPendingAction(null);
@@ -643,7 +651,7 @@ const WarehouseDashboard = () => {
                 {activeTab.columns.map(col => (
                   <th key={col.key} style={{ padding: '10px 12px', textAlign: 'left', color: '#6B7280', fontWeight: 500, fontSize: 12, whiteSpace: 'nowrap' }}>{col.label}</th>
                 ))}
-                <th style={{ padding: '10px 12px', width: 130, textAlign: 'left', color: '#6B7280', fontWeight: 500, fontSize: 12 }}>Action</th>
+                <th style={{ padding: '10px 12px', width: 60, textAlign: 'center', color: '#6B7280', fontWeight: 500, fontSize: 12 }}></th>
               </tr>
             </thead>
             <tbody>
@@ -662,11 +670,16 @@ const WarehouseDashboard = () => {
                         {col.badge ? <Badge value={row[col.key]} /> : row[col.key]}
                       </td>
                     ))}
-                    <td style={{ padding: '12px 12px' }}>
+                    <td style={{ padding: '12px 12px', textAlign: 'center' }}>
                       <button
                         onClick={() => (activeTab.key === 'requests' ? openRequestDetails(row) : openDetailsDrawer(row))}
-                        style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '6px 12px', borderRadius: 8, border: '1px solid #BFDBFE', background: '#EFF6FF', fontSize: 12, color: '#1D4ED8', cursor: 'pointer', fontWeight: 600, whiteSpace: 'nowrap' }}>
-                        <Eye size={12} /> {activeTab.actionLabel || 'View Request'}
+                        title="View Details"
+                        style={{
+                          width: 30, height: 30, display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                          borderRadius: '50%', border: '1px solid #BFDBFE', background: '#EFF6FF', color: '#1D4ED8',
+                          cursor: 'pointer', padding: 0,
+                        }}>
+                        <Eye size={14} />
                       </button>
                     </td>
                   </tr>
