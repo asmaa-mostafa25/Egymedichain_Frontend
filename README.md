@@ -1,6 +1,6 @@
 # EGY-MediChain — Frontend
 
-Pharmaceutical supply chain management system built for Egypt's Ministry of Health. The frontend provides dashboards and workflows for tracking medicine flow across pharmacies, factories, suppliers/importers, and warehouses.
+A pharmaceutical supply chain management web application. The frontend provides dashboards and workflows for tracking medicine flow across pharmacies, factories, suppliers/importers, and warehouses.
 
 ## Tech Stack
 
