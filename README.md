@@ -86,4 +86,3 @@ npm run build
 ## Notes
 
 - The frontend is live-connected to the ASP.NET backend across all dashboard pages. Backend endpoints are tracked against a Swagger/OpenAPI spec; some pages (e.g. Warehouse Dashboard) have had their spec audited for gaps — missing endpoints, untyped response schemas, missing DTO fields, undocumented enums/validation.
-- Design tokens were extracted from reference screenshots provided for the Ministry of Health portal.
